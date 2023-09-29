@@ -293,3 +293,19 @@ In Elaine, handlers are separate types from functions. This also introduces the 
 ```elaine
 let main = handle[hState] handle[hWrite] handle[hAbort] { ... };
 ```
+
+## Nim
+
+So Nim does not have algebraic effects. However, it does have something cool: pure functions.
+
+```nim
+# foo must be pure!
+func foo():
+  ...
+
+# bar can have any effect!
+proc bar():
+  ...
+```
+
+Different keywords for different default sets of effects is certainly interesting.

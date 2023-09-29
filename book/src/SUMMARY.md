@@ -4,5 +4,6 @@
 - [Chapter 1](./chapter_1.md)
 
 
-- [Design](./design.html)
+- [Design](./design.md)
   - [Exploration](./exploration.md)
+  - [Observations & Ideas](./observations.md)
