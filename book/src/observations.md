@@ -61,6 +61,7 @@ Open questions:
 - How to deal with multiple allocation arenas?
 - Should `Allocation` take a type parameter, possibly with some `Any` type? Or should that be `Arena<T>`.
 - How do we deal with freeing values? Do we need full ownership (probably yeah)?
+- How much more testing is needed to be sure some code is not depending on an implementation detail of an effect. The problem is clearer with for example an executor effect and having code that's only compatible with one executor.
 
 ## Effect Row Aliases
 

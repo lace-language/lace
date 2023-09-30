@@ -1,7 +1,8 @@
 # Exploration
 
 TL;DR of interesting features:
-- Distinction between `ctl`, `fun` & `val` operations (Koka)
+- Distinction between `ctl`, `fun` & `val` operations (Koka) 
+[jonathan says: we should encode these as associated functions/consts; unrelated: does this mean we need to solve the trait-with-fields problem?]
 - Named and scoped handlers (Koka)
 - Effect row aliases (Koka)
 - `with` keyword (Koka)
@@ -82,7 +83,7 @@ fun foo()
 
 ## Inline handlers
 
-Very concise syntax for creating handlers with a single effect:
+Very concise syntax for creating handlers with a single effect operation:
 
 ```
 fun foo()
@@ -110,7 +111,9 @@ Ref: @@koka-named-handlers
 
 This is introduced specifically for an allocation effect (which they call `Heap`).
 
-Scoped handlers associate a type parameter with each handler _instantiation_. So that, for example, references cannot be used on a different handler. This is similar to, but also different from, lifetimes.
+Scoped handlers associate a type parameter with each handler _instantiation_. So that, for example, references cannot be used on a different handler. This is similar to, but also different from, lifetimes. 
+See lifetimes as tokens: 
+Ref: @@beingessner2016
 
 ### Linear effects
 
@@ -154,7 +157,7 @@ which is the same as Koka's:
 ```koka
 fun map(f: X -> e Y, l: List[X]) e Y
 ```
-
+, the empty effec
 But in Frank, we have to think less about the effect rows.
 
 Here is the abort effect ([src](https://github.com/frank-lang/frank/blob/master/examples/exception.fk)):
