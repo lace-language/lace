@@ -312,3 +312,9 @@ proc bar():
 ```
 
 Different keywords for different default sets of effects is certainly interesting.
+
+## Rust
+
+
+### Borrow checker
+Surprisingly useful for links to internals of NLL (the borrow checker): <https://rustc-dev-guide.rust-lang.org/borrow_check.html>
