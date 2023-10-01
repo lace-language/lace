@@ -5,7 +5,7 @@ pub type Lexer<'source> = logos::Lexer<'source, Token>;
 #[derive(Logos, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f]+")]
 pub enum Token {
-    #[regex("[a-zA-Z]+")]
+    #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
     Ident,
     #[regex(r#""([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#, |lex| lex.slice().to_owned())]
     String(String),
