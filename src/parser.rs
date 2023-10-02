@@ -4,6 +4,75 @@ use crate::ast::{Block, Expr, Ident, Lit, Statement};
 use crate::lexer::{Lexer, Token};
 use bumpalo::{collections::Vec, Bump};
 
+macro_rules! tok {
+    (&&) => {
+        Token::AmpAmp
+    };
+    (||) => {
+        Token::PipePipe
+    };
+    (<=) => {
+        Token::AngleLeftEquals
+    };
+    (>=) => {
+        Token::AngleRightEquals
+    };
+    (==) => {
+        Token::EqualsEquals
+    };
+    (!=) => {
+        Token::BangEquals
+    };
+    (!) => {
+        Token::Bang
+    };
+    (+) => {
+        Token::Plus
+    };
+    (-) => {
+        Token::Minus
+    };
+    (*) => {
+        Token::Star
+    };
+    (/) => {
+        Token::Slash
+    };
+    (.) => {
+        Token::Period
+    };
+    (,) => {
+        Token::Comma
+    };
+    (;) => {
+        Token::Semicolon
+    };
+    (:) => {
+        Token::Colon
+    };
+    (=) => {
+        Token::Equals
+    };
+    (fn) => {
+        Token::Fn
+    };
+    (let) => {
+        Token::Let
+    };
+    (false) => {
+        Token::False
+    };
+    (true) => {
+        Token::True
+    };
+    (<) => {
+        Token::AngleLeft
+    };
+    (>) => {
+        Token::AngleRight
+    };
+}
+
 type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Debug)]
@@ -85,7 +154,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
 
     fn disjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.conjunction()?;
-        while self.accept(Token::PipePipe)? {
+        while self.accept(tok![||])? {
             let right = self.conjunction()?;
             left = Expr::LogicalOr(self.alloc(left), self.alloc(right));
         }
@@ -96,7 +165,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     //             | inversion
     fn conjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.comparison()?;
-        while self.accept(Token::AmpAmp)? {
+        while self.accept(tok![&&])? {
             let right = self.comparison()?;
             left = Expr::LogicalAnd(self.alloc(left), self.alloc(right));
         }
@@ -106,12 +175,12 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn comparison(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let left = self.inversion()?;
         let tokens: &[(_, fn(_, _) -> _)] = &[
-            (Token::EqualsEquals, Expr::Eq),
-            (Token::BangEquals, Expr::Neq),
-            (Token::AngleRightEquals, Expr::Gte),
-            (Token::AngleLeftEquals, Expr::Lte),
-            (Token::AngleRight, Expr::Gt),
-            (Token::AngleLeft, Expr::Lt),
+            (tok![==], Expr::Eq),
+            (tok![!=], Expr::Neq),
+            (tok![>=], Expr::Gte),
+            (tok![<=], Expr::Lte),
+            (tok![>], Expr::Gt),
+            (tok![<], Expr::Lt),
         ];
         for (t, f) in tokens {
             if self.accept(*t)? {
@@ -126,7 +195,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     //           | sum
     // TODO: this should go to comparison
     fn inversion(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        if self.accept(Token::Bang)? {
+        if self.accept(tok![!])? {
             let arg = self.inversion()?;
             Ok(Expr::Not(self.alloc(arg)))
         } else {
@@ -140,10 +209,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn sum(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.term()?;
         loop {
-            if self.accept(Token::Plus)? {
+            if self.accept(tok![+])? {
                 let right = self.term()?;
                 left = Expr::Add(self.alloc(left), self.alloc(right));
-            } else if self.accept(Token::Minus)? {
+            } else if self.accept(tok![-])? {
                 let right = self.term()?;
                 left = Expr::Sub(self.alloc(left), self.alloc(right));
             } else {
@@ -158,10 +227,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn term(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.factor()?;
         loop {
-            if self.accept(Token::Star)? {
+            if self.accept(tok![*])? {
                 let right = self.factor()?;
                 left = Expr::Mul(self.alloc(left), self.alloc(right));
-            } else if self.accept(Token::Slash)? {
+            } else if self.accept(tok![/])? {
                 let right = self.factor()?;
                 left = Expr::Div(self.alloc(left), self.alloc(right));
             } else {
@@ -173,7 +242,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // factor = '-' atom
     //        | atom
     fn factor(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        if self.accept(Token::Minus)? {
+        if self.accept(tok![-])? {
             let arg = self.atom()?;
             Ok(Expr::Neg(self.alloc(arg)))
         } else {
@@ -217,7 +286,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         let mut vec = Vec::new_in(self.arena);
         vec.push(expr);
 
-        while self.accept(Token::Comma)? {
+        while self.accept(tok![,])? {
             if self.accept(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
                 return Ok(Expr::Tuple(slice));
@@ -245,15 +314,15 @@ impl<'source, 'arena> Parser<'source, 'arena> {
                     last: None,
                 });
             }
-            if self.accept(Token::Let)? {
+            if self.accept(tok![let])? {
                 let ident = self.ident()?;
-                self.eat(Token::Equals)?;
+                self.eat(tok![=])?;
                 let expr = self.expr()?;
-                self.eat(Token::Semicolon)?;
+                self.eat(tok![;])?;
                 vec.push(Statement::Let(ident, self.alloc(expr)));
             } else {
                 let expr = self.expr()?;
-                if self.accept(Token::Semicolon)? {
+                if self.accept(tok![;])? {
                     vec.push(Statement::Expr(self.alloc(expr)));
                 } else {
                     self.eat(Token::CurlyRight)?;
