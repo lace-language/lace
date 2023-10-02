@@ -6,7 +6,7 @@ pub type Lexer<'source> = logos::Lexer<'source, Token<'source>>;
 #[logos(skip r"[ \t\n\f]+")]
 pub enum Token<'a> {
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
-    Ident,
+    Ident(&'a str),
     #[regex(r#""([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#, |lex| lex.slice())]
     String(&'a str),
     #[regex(r"[0-9][0-9_]*", |lex| lex.slice().replace('_', "").parse::<u64>().unwrap())]
@@ -41,6 +41,12 @@ pub enum Token<'a> {
     Period,
     #[token(",")]
     Comma,
+    #[token(";")]
+    Semicolon,
+    #[token(":")]
+    Colon,
+    #[token("=")]
+    Equals,
 
     // Keywords
     #[token("fn")]

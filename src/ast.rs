@@ -1,10 +1,10 @@
 /// Expressions
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr<'source, 'arena> {
     Lit(Lit<'source>),
     Fn,
-    Block(&'arena [&'arena Statement<'source, 'arena>]),
-    Ident(&'source str),
+    Block(Block<'source, 'arena>),
+    Ident(Ident<'source>),
     UnaryMinus(&'arena Self),
     Mul(&'arena Self, &'arena Self),
     Div(&'arena Self, &'arena Self),
@@ -22,8 +22,19 @@ pub enum Expr<'source, 'arena> {
     NotEquals(&'arena Self, &'arena Self),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ident<'source> {
+    pub string: &'source str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Block<'source, 'arena> {
+    pub stmts: &'arena [&'arena Statement<'source, 'arena>],
+    pub last: Option<&'arena Expr<'source, 'arena>>,
+}
+
 /// Literal values
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Lit<'source> {
     Bool(bool),
     Int(u64),
@@ -31,8 +42,8 @@ pub enum Lit<'source> {
 }
 
 /// Statements
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Statement<'source, 'arena> {
-    Expr(Expr<'source, 'arena>),
-    Let,
+    Expr(&'arena Expr<'source, 'arena>),
+    Let(Ident<'source>, &'arena Expr<'source, 'arena>),
 }

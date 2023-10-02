@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::ast::{Expr, Lit};
+use crate::ast::{Block, Expr, Ident, Lit, Statement};
 use crate::lexer::{Lexer, Token};
 use bumpalo::{collections::Vec, Bump};
 
@@ -54,15 +54,26 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     fn accept(&mut self, token: Token) -> ParseResult<bool> {
+        let res = self.accept_peek(token)?;
+        if res {
+            self.next()?;
+        }
+        Ok(res)
+    }
+
+    fn accept_peek(&mut self, token: Token) -> ParseResult<bool> {
         let Some(lexed_token) = self.peek()? else {
             return Ok(false);
         };
 
-        if token == lexed_token {
-            self.next()?;
-            Ok(true)
+        Ok(token == lexed_token)
+    }
+
+    fn eat(&mut self, token: Token) -> ParseResult<()> {
+        if self.next()? == token {
+            Ok(())
         } else {
-            Ok(false)
+            Err(ParseError::Expected)
         }
     }
 
@@ -172,12 +183,19 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     fn atom(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+        if self.accept_peek(Token::RoundLeft)? {
+            return self.paren();
+        } else if self.accept_peek(Token::CurlyLeft)? {
+            let expr = Expr::Block(self.block()?);
+            return Ok(self.alloc(expr));
+        }
+
         let expr = match self.next()? {
+            Token::Ident(s) => Expr::Ident(Ident { string: s }),
             Token::False => Expr::Lit(Lit::Bool(false)),
             Token::True => Expr::Lit(Lit::Bool(true)),
             Token::String(s) => Expr::Lit(Lit::String(s)),
             Token::Int(i) => Expr::Lit(Lit::Int(i)),
-            Token::RoundLeft => return self.paren(),
             _ => return Err(ParseError::Expected),
         };
 
@@ -185,6 +203,8 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     fn paren(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+        self.eat(Token::RoundLeft)?;
+
         if self.accept(Token::RoundRight)? {
             return Ok(self.alloc(Expr::Tuple(&[])));
         }
@@ -213,12 +233,53 @@ impl<'source, 'arena> Parser<'source, 'arena> {
             Err(ParseError::Expected)
         }
     }
+
+    fn block(&mut self) -> ParseResult<Block<'source, 'arena>> {
+        self.eat(Token::CurlyLeft)?;
+
+        let mut vec = Vec::new_in(self.arena);
+
+        loop {
+            if self.accept(Token::CurlyRight)? {
+                return Ok(Block {
+                    stmts: vec.into_bump_slice(),
+                    last: None,
+                });
+            }
+            if self.accept(Token::Let)? {
+                let ident = self.ident()?;
+                self.eat(Token::Equals)?;
+                let expr = self.expr()?;
+                self.eat(Token::Semicolon)?;
+                let stmt = self.alloc(Statement::Let(ident, expr));
+                vec.push(stmt);
+            } else {
+                let expr = self.expr()?;
+                if self.accept(Token::Semicolon)? {
+                    vec.push(self.alloc(Statement::Expr(expr)));
+                } else {
+                    self.eat(Token::CurlyRight)?;
+                    return Ok(Block {
+                        stmts: vec.into_bump_slice(),
+                        last: Some(expr),
+                    });
+                }
+            }
+        }
+    }
+
+    fn ident(&mut self) -> ParseResult<Ident<'source>> {
+        match self.next()? {
+            Token::Ident(s) => Ok(Ident { string: s }),
+            _ => Err(ParseError::Expected),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use crate::ast::{Expr, Lit};
+    use crate::ast::{Block, Expr, Ident, Lit, Statement};
     use bumpalo::Bump;
 
     macro_rules! assert_matches {
@@ -344,6 +405,58 @@ mod test {
         assert_expr_matches!("1 > 2", Expr::GreaterThan(int!(1), int!(2)));
         assert_expr_matches!("1 == 2", Expr::Equals(int!(1), int!(2)));
         assert_expr_matches!("1 != 2", Expr::NotEquals(int!(1), int!(2)));
+    }
+
+    #[test]
+    fn ident() {
+        assert_expr_matches!("foo", Expr::Ident(Ident { string: "foo" }));
+        assert_expr_matches!("bar", Expr::Ident(Ident { string: "bar" }));
+        assert_expr_matches!(
+            "x != y",
+            Expr::NotEquals(
+                Expr::Ident(Ident { string: "x" }),
+                Expr::Ident(Ident { string: "y" }),
+            )
+        );
+    }
+
+    #[test]
+    fn blocks() {
+        assert_expr_matches!(
+            "{}",
+            Expr::Block(Block {
+                stmts: &[],
+                last: None
+            })
+        );
+        assert_expr_matches!(
+            "{ 10 }",
+            Expr::Block(Block {
+                stmts: &[],
+                last: Some(&Expr::Lit(Lit::Int(10))),
+            })
+        );
+        assert_expr_matches!(
+            "{ 10; }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(int!(10))],
+                last: None,
+            })
+        );
+        assert_expr_matches!(
+            "{ 10; 20 }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(int!(10))],
+                last: Some(&int!(20)),
+            })
+        );
+        assert_expr_matches!(
+            "{ let x = 10; x }",
+            Expr::Block(Block {
+                stmts: &[Statement::Let(Ident { string: "x" }, int!(10))],
+                last: Some(Expr::Ident(Ident { string: "x" })),
+            })
+        );
     }
 
     #[test]
