@@ -1,44 +1,31 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ExprId(pub usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct StatementId(pub usize);
-
-/// Binary Operations
-// TODO: Describe the symbol or the semantics?
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinOp {
-    Plus,
-    Minus,
-    Slash,
-    Star,
-}
-
 /// Expressions
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Expr {
-    Lit(Lit),
-    BinOp {
-        op: BinOp,
-        left: ExprId,
-        right: ExprId,
-    },
+pub enum Expr<'source, 'arena> {
+    Lit(Lit<'source>),
     Fn,
-    Block(Vec<Statement>),
-    Ident(String),
+    Block(&'arena [&'arena Statement<'source, 'arena>]),
+    Ident(&'source str),
+    UnaryMinus(&'arena Self),
+    Mul(&'arena Self, &'arena Self),
+    Div(&'arena Self, &'arena Self),
+    Add(&'arena Self, &'arena Self),
+    Sub(&'arena Self, &'arena Self),
+    UnaryNot(&'arena Self),
+    LogicalAnd(&'arena Self, &'arena Self),
+    LogicalOr(&'arena Self, &'arena Self),
 }
 
 /// Literal values
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Lit {
+pub enum Lit<'source> {
     Bool(bool),
-    Int(i64),
-    String(String),
+    Int(u64),
+    String(&'source str),
 }
 
 /// Statements
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Statement {
-    Expr(Expr),
+pub enum Statement<'source, 'arena> {
+    Expr(Expr<'source, 'arena>),
     Let,
 }
