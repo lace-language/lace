@@ -7,10 +7,10 @@ pub type Lexer<'source> = logos::Lexer<'source, Token<'source>>;
 pub enum Token<'a> {
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
     Ident(&'a str),
-    #[regex(r#""([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#, |lex| lex.slice())]
+    #[regex(r#""([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#)]
     String(&'a str),
-    #[regex(r"[0-9][0-9_]*", |lex| lex.slice().replace('_', "").parse::<u64>().unwrap())]
-    Int(u64),
+    #[regex(r"[0-9][0-9_]*")]
+    Int(&'a str),
 
     // Multi-character operators
     #[token("&&")]

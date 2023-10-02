@@ -300,7 +300,7 @@ mod test {
 
     macro_rules! int {
         ($i:literal) => {
-            Expr::Lit(Lit::Int($i))
+            Expr::Lit(Lit::Int(stringify!($i)))
         };
     }
 
@@ -320,8 +320,8 @@ mod test {
     fn integers() {
         assert_expr_matches!("10", int!(10));
         assert_expr_matches!("0", int!(0));
-        assert_expr_matches!("0054", int!(54));
-        assert_expr_matches!("1_2_3_4_5", int!(12345));
+        assert_expr_matches!("0054", int!(0054));
+        assert_expr_matches!("1_2_3_4_5", int!(1_2_3_4_5));
     }
 
     #[test]
@@ -431,7 +431,7 @@ mod test {
             "{ 10 }",
             Expr::Block(Block {
                 stmts: &[],
-                last: Some(Expr::Lit(Lit::Int(10))),
+                last: Some(int!(10)),
             })
         );
         assert_expr_matches!(

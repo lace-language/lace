@@ -37,7 +37,7 @@ pub struct Block<'source, 'arena> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Lit<'source> {
     Bool(bool),
-    Int(u64),
+    Int(&'source str),
     String(&'source str),
 }
 
