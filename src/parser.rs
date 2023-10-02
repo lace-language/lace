@@ -29,7 +29,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         }
     }
 
-    pub fn parse(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    pub fn parse(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         self.expr()
     }
 
@@ -78,33 +78,32 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     // TODO: Proper error handling
-    // TODO: Operators
     // TODO: Function calls
-    fn expr(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn expr(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         self.disjunction()
     }
 
-    fn disjunction(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn disjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.conjunction()?;
         while self.accept(Token::PipePipe)? {
             let right = self.conjunction()?;
-            left = self.alloc(Expr::LogicalOr(left, right));
+            left = Expr::LogicalOr(self.alloc(left), self.alloc(right));
         }
         Ok(left)
     }
 
     // conjunction = conjunction 'and' inversion
     //             | inversion
-    fn conjunction(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn conjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.comparison()?;
         while self.accept(Token::AmpAmp)? {
             let right = self.comparison()?;
-            left = self.alloc(Expr::LogicalAnd(left, right));
+            left = Expr::LogicalAnd(self.alloc(left), self.alloc(right));
         }
         Ok(left)
     }
 
-    fn comparison(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn comparison(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let left = self.inversion()?;
         let tokens: &[(_, fn(_, _) -> _)] = &[
             (Token::EqualsEquals, Expr::Equals),
@@ -117,7 +116,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         for (t, f) in tokens {
             if self.accept(*t)? {
                 let right = self.inversion()?;
-                return Ok(self.alloc(f(left, right)));
+                return Ok(f(self.alloc(left), self.alloc(right)));
             }
         }
         Ok(left)
@@ -126,10 +125,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // inversion = '!' inversion
     //           | sum
     // TODO: this should go to comparison
-    fn inversion(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn inversion(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         if self.accept(Token::Bang)? {
             let arg = self.inversion()?;
-            Ok(self.alloc(Expr::UnaryNot(arg)))
+            Ok(Expr::UnaryNot(self.alloc(arg)))
         } else {
             self.sum()
         }
@@ -138,15 +137,15 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // sum = sum '+' term
     //     | sum '-' term
     //     | term
-    fn sum(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn sum(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.term()?;
         loop {
             if self.accept(Token::Plus)? {
                 let right = self.term()?;
-                left = self.alloc(Expr::Add(left, right));
+                left = Expr::Add(self.alloc(left), self.alloc(right));
             } else if self.accept(Token::Minus)? {
                 let right = self.term()?;
-                left = self.alloc(Expr::Sub(left, right));
+                left = Expr::Sub(self.alloc(left), self.alloc(right));
             } else {
                 return Ok(left);
             }
@@ -156,15 +155,15 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // term = term '*' factor
     //      | term '/' factor
     //      | factor
-    fn term(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn term(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.factor()?;
         loop {
             if self.accept(Token::Star)? {
                 let right = self.factor()?;
-                left = self.alloc(Expr::Mul(left, right));
+                left = Expr::Mul(self.alloc(left), self.alloc(right));
             } else if self.accept(Token::Slash)? {
                 let right = self.factor()?;
-                left = self.alloc(Expr::Div(left, right));
+                left = Expr::Div(self.alloc(left), self.alloc(right));
             } else {
                 return Ok(left);
             }
@@ -173,21 +172,21 @@ impl<'source, 'arena> Parser<'source, 'arena> {
 
     // factor = '-' atom
     //        | atom
-    fn factor(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn factor(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         if self.accept(Token::Minus)? {
             let arg = self.atom()?;
-            Ok(self.alloc(Expr::UnaryMinus(arg)))
+            Ok(Expr::UnaryMinus(self.alloc(arg)))
         } else {
             self.atom()
         }
     }
 
-    fn atom(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn atom(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         if self.accept_peek(Token::RoundLeft)? {
             return self.paren();
         } else if self.accept_peek(Token::CurlyLeft)? {
-            let expr = Expr::Block(self.block()?);
-            return Ok(self.alloc(expr));
+            let expr = self.block()?;
+            return Ok(Expr::Block(self.alloc(expr)));
         }
 
         let expr = match self.next()? {
@@ -199,14 +198,14 @@ impl<'source, 'arena> Parser<'source, 'arena> {
             _ => return Err(ParseError::Expected),
         };
 
-        Ok(self.alloc(expr))
+        Ok(expr)
     }
 
-    fn paren(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+    fn paren(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         self.eat(Token::RoundLeft)?;
 
         if self.accept(Token::RoundRight)? {
-            return Ok(self.alloc(Expr::Tuple(&[])));
+            return Ok(Expr::Tuple(&[]));
         }
 
         let expr = self.expr()?;
@@ -221,14 +220,14 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         while self.accept(Token::Comma)? {
             if self.accept(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
-                return Ok(self.alloc(Expr::Tuple(slice)));
+                return Ok(Expr::Tuple(slice));
             }
             vec.push(self.expr()?);
         }
 
         if self.accept(Token::RoundRight)? {
             let slice = vec.into_bump_slice();
-            Ok(self.alloc(Expr::Tuple(slice)))
+            Ok(Expr::Tuple(slice))
         } else {
             Err(ParseError::Expected)
         }
@@ -251,12 +250,11 @@ impl<'source, 'arena> Parser<'source, 'arena> {
                 self.eat(Token::Equals)?;
                 let expr = self.expr()?;
                 self.eat(Token::Semicolon)?;
-                let stmt = self.alloc(Statement::Let(ident, expr));
-                vec.push(stmt);
+                vec.push(Statement::Let(ident, self.alloc(expr)));
             } else {
                 let expr = self.expr()?;
                 if self.accept(Token::Semicolon)? {
-                    vec.push(self.alloc(Statement::Expr(expr)));
+                    vec.push(Statement::Expr(self.alloc(expr)));
                 } else {
                     self.eat(Token::CurlyRight)?;
                     return Ok(Block {
@@ -433,7 +431,7 @@ mod test {
             "{ 10 }",
             Expr::Block(Block {
                 stmts: &[],
-                last: Some(&Expr::Lit(Lit::Int(10))),
+                last: Some(Expr::Lit(Lit::Int(10))),
             })
         );
         assert_expr_matches!(
@@ -447,7 +445,7 @@ mod test {
             "{ 10; 20 }",
             Expr::Block(Block {
                 stmts: &[Statement::Expr(int!(10))],
-                last: Some(&int!(20)),
+                last: Some(int!(20)),
             })
         );
         assert_expr_matches!(

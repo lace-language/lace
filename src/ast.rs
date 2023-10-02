@@ -3,7 +3,7 @@
 pub enum Expr<'source, 'arena> {
     Lit(Lit<'source>),
     Fn,
-    Block(Block<'source, 'arena>),
+    Block(&'arena Block<'source, 'arena>),
     Ident(Ident<'source>),
     UnaryMinus(&'arena Self),
     Mul(&'arena Self, &'arena Self),
@@ -13,7 +13,7 @@ pub enum Expr<'source, 'arena> {
     UnaryNot(&'arena Self),
     LogicalAnd(&'arena Self, &'arena Self),
     LogicalOr(&'arena Self, &'arena Self),
-    Tuple(&'arena [&'arena Self]),
+    Tuple(&'arena [Self]),
     GreaterThan(&'arena Self, &'arena Self),
     GreaterEquals(&'arena Self, &'arena Self),
     LessThan(&'arena Self, &'arena Self),
@@ -29,8 +29,8 @@ pub struct Ident<'source> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Block<'source, 'arena> {
-    pub stmts: &'arena [&'arena Statement<'source, 'arena>],
-    pub last: Option<&'arena Expr<'source, 'arena>>,
+    pub stmts: &'arena [Statement<'source, 'arena>],
+    pub last: Option<Expr<'source, 'arena>>,
 }
 
 /// Literal values
