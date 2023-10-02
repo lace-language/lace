@@ -13,6 +13,7 @@ pub enum Expr<'source, 'arena> {
     UnaryNot(&'arena Self),
     LogicalAnd(&'arena Self, &'arena Self),
     LogicalOr(&'arena Self, &'arena Self),
+    Tuple(&'arena [&'arena Self]),
 }
 
 /// Literal values

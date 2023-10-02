@@ -2,14 +2,15 @@ use std::iter::Peekable;
 
 use crate::ast::{Expr, Lit, Statement};
 use crate::lexer::{Lexer, Token};
-use bumpalo::Bump;
+use bumpalo::{collections::Vec, Bump};
 use logos::Logos;
 
 type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Debug)]
 enum ParseError {
-    Foo,
+    EndOfInput,
+    Expected,
     // TODO: Figure out how to get the error from logos
     UnrecognizedToken(()),
 }
@@ -33,11 +34,11 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         self.arena.alloc(x)
     }
 
-    fn next(&mut self) -> ParseResult<Option<Token<'source>>> {
+    fn next(&mut self) -> ParseResult<Token<'source>> {
         match self.lexer.next() {
-            Some(Ok(t)) => Ok(Some(t)),
+            Some(Ok(t)) => Ok(t),
             Some(Err(_)) => Err(ParseError::UnrecognizedToken(())),
-            None => Ok(None),
+            None => Err(ParseError::EndOfInput),
         }
     }
 
@@ -65,7 +66,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // TODO: Proper error handling
     // TODO: Operators
     // TODO: Function calls
-    fn expr(&mut self) -> ParseResult<&'arena Expr> {
+    fn expr(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
         self.disjunction()
     }
 
@@ -148,20 +149,47 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         }
     }
 
-    fn atom<'a>(&'a mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
-        let Some(token) = self.next()? else {
-            return Err(ParseError::Foo);
-        };
-
-        let expr = match token {
+    fn atom(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+        let expr = match self.next()? {
             Token::False => Expr::Lit(Lit::Bool(false)),
             Token::True => Expr::Lit(Lit::Bool(true)),
             Token::String(s) => Expr::Lit(Lit::String(s)),
             Token::Int(i) => Expr::Lit(Lit::Int(i)),
-            _ => return Err(ParseError::Foo),
+            Token::RoundOpen => return self.paren(),
+            _ => return Err(ParseError::Expected),
         };
 
         Ok(self.alloc(expr))
+    }
+
+    fn paren(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+        if self.accept(Token::RoundClose)? {
+            return Ok(self.alloc(Expr::Tuple(&[])));
+        }
+
+        let expr = self.expr()?;
+
+        if self.accept(Token::RoundClose)? {
+            return Ok(expr);
+        }
+
+        let mut vec = Vec::new_in(self.arena);
+        vec.push(expr);
+
+        while self.accept(Token::Comma)? {
+            if self.accept(Token::RoundClose)? {
+                let slice = vec.into_bump_slice();
+                return Ok(self.alloc(Expr::Tuple(slice)));
+            }
+            vec.push(self.expr()?);
+        }
+
+        if self.accept(Token::RoundClose)? {
+            let slice = vec.into_bump_slice();
+            Ok(self.alloc(Expr::Tuple(slice)))
+        } else {
+            Err(ParseError::Expected)
+        }
     }
 }
 
@@ -221,11 +249,69 @@ mod test {
     }
 
     #[test]
-    fn binop() {
+    fn logical() {
+        assert_expr_matches!("!true", Expr::UnaryNot(bool!(true)));
+        assert_expr_matches!("!false", Expr::UnaryNot(bool!(false)));
+        assert_expr_matches!("true && false", Expr::LogicalAnd(bool!(true), bool!(false)));
+        assert_expr_matches!(
+            "true && false && false",
+            Expr::LogicalAnd(Expr::LogicalAnd(bool!(true), bool!(false)), bool!(false))
+        );
+        assert_expr_matches!("true || false", Expr::LogicalOr(bool!(true), bool!(false)));
+        assert_expr_matches!(
+            "true || false || false",
+            Expr::LogicalOr(Expr::LogicalOr(bool!(true), bool!(false)), bool!(false))
+        );
+        assert_expr_matches!(
+            "true && false || false",
+            Expr::LogicalOr(Expr::LogicalAnd(bool!(true), bool!(false)), bool!(false))
+        );
+        assert_expr_matches!(
+            "true || false && false",
+            Expr::LogicalOr(bool!(true), Expr::LogicalAnd(bool!(false), bool!(false)))
+        );
+        assert_expr_matches!(
+            "true || !false && false",
+            Expr::LogicalOr(
+                bool!(true),
+                Expr::LogicalAnd(Expr::UnaryNot(bool!(false)), bool!(false))
+            )
+        );
+    }
+
+    #[test]
+    fn arithmetic_binop() {
         assert_expr_matches!("2 + 3", Expr::Add(int!(2), int!(3)));
+        assert_expr_matches!("2 + 3 + 4", Expr::Add(Expr::Add(int!(2), int!(3)), int!(4)));
         assert_expr_matches!("2 - 3", Expr::Sub(int!(2), int!(3)));
+        assert_expr_matches!("2 - 3 - 4", Expr::Sub(Expr::Sub(int!(2), int!(3)), int!(4)));
         assert_expr_matches!("2 * 3", Expr::Mul(int!(2), int!(3)));
+        assert_expr_matches!("2 * 3 * 4", Expr::Mul(Expr::Mul(int!(2), int!(3)), int!(4)));
         assert_expr_matches!("2 / 3", Expr::Div(int!(2), int!(3)));
+        assert_expr_matches!("2 / 3 / 4", Expr::Div(Expr::Div(int!(2), int!(3)), int!(4)));
+        assert_expr_matches!(
+            "2 / 3 + 4 * 5",
+            Expr::Add(Expr::Div(int!(2), int!(3)), Expr::Mul(int!(4), int!(5)))
+        );
+        assert_expr_matches!("2 + 3 * 4", Expr::Add(int!(2), Expr::Mul(int!(3), int!(4))));
+        assert_expr_matches!(
+            "(2 + 3) * 4",
+            Expr::Mul(Expr::Add(int!(2), int!(3)), int!(4))
+        );
+    }
+
+    #[test]
+    fn tuples() {
+        assert_expr_matches!("()", Expr::Tuple(&[]));
+        assert_expr_matches!("(1)", int!(1));
+        assert_expr_matches!("(1,)", Expr::Tuple(&[int!(1)]));
+        assert_expr_matches!("(1,2)", Expr::Tuple(&[int!(1), int!(2)]));
+        assert_expr_matches!("(1,2,)", Expr::Tuple(&[int!(1), int!(2)]));
+        assert_expr_matches!("(1,2,3)", Expr::Tuple(&[int!(1), int!(2), int!(3)]));
+        assert_expr_matches!(
+            "((1,2,3),)",
+            Expr::Tuple(&[Expr::Tuple(&[int!(1), int!(2), int!(3)])])
+        );
     }
 
     #[test]
