@@ -1,33 +1,36 @@
 use std::iter::Peekable;
 
-use crate::ast::{Expr, Lit, Statement};
+use crate::ast::{Expr, Lit};
 use crate::lexer::{Lexer, Token};
 use bumpalo::{collections::Vec, Bump};
-use logos::Logos;
 
 type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Debug)]
-enum ParseError {
+pub enum ParseError {
     EndOfInput,
     Expected,
     // TODO: Figure out how to get the error from logos
     UnrecognizedToken(()),
 }
 
-struct Parser<'source, 'arena> {
+pub struct Parser<'source, 'arena> {
     _source: &'source str,
     lexer: Peekable<Lexer<'source>>,
     arena: &'arena Bump,
 }
 
 impl<'source, 'arena> Parser<'source, 'arena> {
-    fn new(source: &'source str, arena: &'arena Bump) -> Self {
+    pub fn new(source: &'source str, arena: &'arena Bump) -> Self {
         Self {
             _source: source,
             lexer: Lexer::new(source).peekable(),
             arena,
         }
+    }
+
+    pub fn parse(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+        self.expr()
     }
 
     fn alloc<T>(&mut self, x: T) -> &'arena T {
@@ -82,10 +85,29 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // conjunction = conjunction 'and' inversion
     //             | inversion
     fn conjunction(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
-        let mut left = self.inversion()?;
+        let mut left = self.comparison()?;
         while self.accept(Token::AmpAmp)? {
-            let right = self.inversion()?;
+            let right = self.comparison()?;
             left = self.alloc(Expr::LogicalAnd(left, right));
+        }
+        Ok(left)
+    }
+
+    fn comparison(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
+        let left = self.inversion()?;
+        let tokens: &[(_, fn(_, _) -> _)] = &[
+            (Token::EqualsEquals, Expr::Equals),
+            (Token::BangEquals, Expr::NotEquals),
+            (Token::AngleRightEquals, Expr::GreaterEquals),
+            (Token::AngleLeftEquals, Expr::LessEquals),
+            (Token::AngleRight, Expr::GreaterThan),
+            (Token::AngleLeft, Expr::LessThan),
+        ];
+        for (t, f) in tokens {
+            if self.accept(*t)? {
+                let right = self.inversion()?;
+                return Ok(self.alloc(f(left, right)));
+            }
         }
         Ok(left)
     }
@@ -155,7 +177,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
             Token::True => Expr::Lit(Lit::Bool(true)),
             Token::String(s) => Expr::Lit(Lit::String(s)),
             Token::Int(i) => Expr::Lit(Lit::Int(i)),
-            Token::RoundOpen => return self.paren(),
+            Token::RoundLeft => return self.paren(),
             _ => return Err(ParseError::Expected),
         };
 
@@ -163,13 +185,13 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     fn paren(&mut self) -> ParseResult<&'arena Expr<'source, 'arena>> {
-        if self.accept(Token::RoundClose)? {
+        if self.accept(Token::RoundRight)? {
             return Ok(self.alloc(Expr::Tuple(&[])));
         }
 
         let expr = self.expr()?;
 
-        if self.accept(Token::RoundClose)? {
+        if self.accept(Token::RoundRight)? {
             return Ok(expr);
         }
 
@@ -177,14 +199,14 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         vec.push(expr);
 
         while self.accept(Token::Comma)? {
-            if self.accept(Token::RoundClose)? {
+            if self.accept(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
                 return Ok(self.alloc(Expr::Tuple(slice)));
             }
             vec.push(self.expr()?);
         }
 
-        if self.accept(Token::RoundClose)? {
+        if self.accept(Token::RoundRight)? {
             let slice = vec.into_bump_slice();
             Ok(self.alloc(Expr::Tuple(slice)))
         } else {
@@ -312,6 +334,16 @@ mod test {
             "((1,2,3),)",
             Expr::Tuple(&[Expr::Tuple(&[int!(1), int!(2), int!(3)])])
         );
+    }
+
+    #[test]
+    fn comparisons() {
+        assert_expr_matches!("1 <= 2", Expr::LessEquals(int!(1), int!(2)));
+        assert_expr_matches!("1 >= 2", Expr::GreaterEquals(int!(1), int!(2)));
+        assert_expr_matches!("1 < 2", Expr::LessThan(int!(1), int!(2)));
+        assert_expr_matches!("1 > 2", Expr::GreaterThan(int!(1), int!(2)));
+        assert_expr_matches!("1 == 2", Expr::Equals(int!(1), int!(2)));
+        assert_expr_matches!("1 != 2", Expr::NotEquals(int!(1), int!(2)));
     }
 
     #[test]

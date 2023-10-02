@@ -14,6 +14,12 @@ pub enum Expr<'source, 'arena> {
     LogicalAnd(&'arena Self, &'arena Self),
     LogicalOr(&'arena Self, &'arena Self),
     Tuple(&'arena [&'arena Self]),
+    GreaterThan(&'arena Self, &'arena Self),
+    GreaterEquals(&'arena Self, &'arena Self),
+    LessThan(&'arena Self, &'arena Self),
+    LessEquals(&'arena Self, &'arena Self),
+    Equals(&'arena Self, &'arena Self),
+    NotEquals(&'arena Self, &'arena Self),
 }
 
 /// Literal values

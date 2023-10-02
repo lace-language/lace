@@ -11,11 +11,22 @@ pub enum Token<'a> {
     String(&'a str),
     #[regex(r"[0-9][0-9_]*", |lex| lex.slice().replace('_', "").parse::<u64>().unwrap())]
     Int(u64),
-    // Operators and the like
+
+    // Multi-character operators
     #[token("&&")]
     AmpAmp,
     #[token("||")]
     PipePipe,
+    #[token("<=")]
+    AngleLeftEquals,
+    #[token(">=")]
+    AngleRightEquals,
+    #[token("==")]
+    EqualsEquals,
+    #[token("!=")]
+    BangEquals,
+
+    // Single-character operators
     #[token("!")]
     Bang,
     #[token("+")]
@@ -30,6 +41,7 @@ pub enum Token<'a> {
     Period,
     #[token(",")]
     Comma,
+
     // Keywords
     #[token("fn")]
     Fn,
@@ -39,21 +51,22 @@ pub enum Token<'a> {
     False,
     #[token("true")]
     True,
+
     // Brackets
     #[token("(")]
-    RoundOpen,
+    RoundLeft,
     #[token(")")]
-    RoundClose,
+    RoundRight,
     #[token("{")]
-    CurlyOpen,
+    CurlyLeft,
     #[token("}")]
-    CurlyClose,
+    CurlyRight,
     #[token("[")]
-    SquareOpen,
+    SquareLeft,
     #[token("]")]
-    SquareClose,
+    SquareRight,
     #[token("<")]
-    AngleOpen,
+    AngleLeft,
     #[token(">")]
-    AngleClose,
+    AngleRight,
 }

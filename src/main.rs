@@ -2,6 +2,11 @@ mod ast;
 mod lexer;
 mod parser;
 
+use bumpalo::Bump;
+use parser::Parser;
+
 fn main() {
-    println!("Hello, world!");
+    let arena = Bump::new();
+    let mut parser = Parser::new("1 + 1", &arena);
+    println!("{:?}", parser.parse());
 }
