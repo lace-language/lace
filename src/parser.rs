@@ -47,7 +47,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
 
     fn peek(&mut self) -> ParseResult<Option<Token<'source>>> {
         match self.lexer.peek() {
-            Some(Ok(t)) => Ok(Some(t.clone())),
+            Some(Ok(t)) => Ok(Some(*t)),
             Some(Err(_)) => Err(ParseError::UnrecognizedToken(())),
             None => Ok(None),
         }
