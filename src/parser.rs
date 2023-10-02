@@ -106,12 +106,12 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn comparison(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let left = self.inversion()?;
         let tokens: &[(_, fn(_, _) -> _)] = &[
-            (Token::EqualsEquals, Expr::Equals),
-            (Token::BangEquals, Expr::NotEquals),
-            (Token::AngleRightEquals, Expr::GreaterEquals),
-            (Token::AngleLeftEquals, Expr::LessEquals),
-            (Token::AngleRight, Expr::GreaterThan),
-            (Token::AngleLeft, Expr::LessThan),
+            (Token::EqualsEquals, Expr::Eq),
+            (Token::BangEquals, Expr::Neq),
+            (Token::AngleRightEquals, Expr::Gte),
+            (Token::AngleLeftEquals, Expr::Lte),
+            (Token::AngleRight, Expr::Gt),
+            (Token::AngleLeft, Expr::Lt),
         ];
         for (t, f) in tokens {
             if self.accept(*t)? {
@@ -128,7 +128,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn inversion(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         if self.accept(Token::Bang)? {
             let arg = self.inversion()?;
-            Ok(Expr::UnaryNot(self.alloc(arg)))
+            Ok(Expr::Not(self.alloc(arg)))
         } else {
             self.sum()
         }
@@ -175,7 +175,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn factor(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         if self.accept(Token::Minus)? {
             let arg = self.atom()?;
-            Ok(Expr::UnaryMinus(self.alloc(arg)))
+            Ok(Expr::Neg(self.alloc(arg)))
         } else {
             self.atom()
         }
@@ -326,13 +326,13 @@ mod test {
 
     #[test]
     fn unary() {
-        assert_expr_matches!("- 2", Expr::UnaryMinus(int!(2)));
+        assert_expr_matches!("- 2", Expr::Neg(int!(2)));
     }
 
     #[test]
     fn logical() {
-        assert_expr_matches!("!true", Expr::UnaryNot(bool!(true)));
-        assert_expr_matches!("!false", Expr::UnaryNot(bool!(false)));
+        assert_expr_matches!("!true", Expr::Not(bool!(true)));
+        assert_expr_matches!("!false", Expr::Not(bool!(false)));
         assert_expr_matches!("true && false", Expr::LogicalAnd(bool!(true), bool!(false)));
         assert_expr_matches!(
             "true && false && false",
@@ -355,7 +355,7 @@ mod test {
             "true || !false && false",
             Expr::LogicalOr(
                 bool!(true),
-                Expr::LogicalAnd(Expr::UnaryNot(bool!(false)), bool!(false))
+                Expr::LogicalAnd(Expr::Not(bool!(false)), bool!(false))
             )
         );
     }
@@ -397,12 +397,12 @@ mod test {
 
     #[test]
     fn comparisons() {
-        assert_expr_matches!("1 <= 2", Expr::LessEquals(int!(1), int!(2)));
-        assert_expr_matches!("1 >= 2", Expr::GreaterEquals(int!(1), int!(2)));
-        assert_expr_matches!("1 < 2", Expr::LessThan(int!(1), int!(2)));
-        assert_expr_matches!("1 > 2", Expr::GreaterThan(int!(1), int!(2)));
-        assert_expr_matches!("1 == 2", Expr::Equals(int!(1), int!(2)));
-        assert_expr_matches!("1 != 2", Expr::NotEquals(int!(1), int!(2)));
+        assert_expr_matches!("1 <= 2", Expr::Lte(int!(1), int!(2)));
+        assert_expr_matches!("1 >= 2", Expr::Gte(int!(1), int!(2)));
+        assert_expr_matches!("1 < 2", Expr::Lt(int!(1), int!(2)));
+        assert_expr_matches!("1 > 2", Expr::Gt(int!(1), int!(2)));
+        assert_expr_matches!("1 == 2", Expr::Eq(int!(1), int!(2)));
+        assert_expr_matches!("1 != 2", Expr::Neq(int!(1), int!(2)));
     }
 
     #[test]
@@ -411,7 +411,7 @@ mod test {
         assert_expr_matches!("bar", Expr::Ident(Ident { string: "bar" }));
         assert_expr_matches!(
             "x != y",
-            Expr::NotEquals(
+            Expr::Neq(
                 Expr::Ident(Ident { string: "x" }),
                 Expr::Ident(Ident { string: "y" }),
             )
