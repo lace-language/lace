@@ -53,6 +53,10 @@ pub enum Token<'a> {
     Fn,
     #[token("let")]
     Let,
+    #[token("if")]
+    If,
+    #[token("else")]
+    Else,
     #[token("false")]
     False,
     #[token("true")]

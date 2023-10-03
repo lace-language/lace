@@ -2,7 +2,11 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Expr<'source, 'arena> {
     Lit(Lit<'source>),
-    Fn,
+    If(
+        &'arena Self,
+        &'arena Block<'source, 'arena>,
+        Option<&'arena Block<'source, 'arena>>,
+    ),
     Block(&'arena Block<'source, 'arena>),
     Ident(Ident<'source>),
     Neg(&'arena Self),

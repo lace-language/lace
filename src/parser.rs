@@ -59,6 +59,12 @@ macro_rules! tok {
     (let) => {
         Token::Let
     };
+    (if) => {
+        Token::If
+    };
+    (else) => {
+        Token::Else
+    };
     (false) => {
         Token::False
     };
@@ -146,8 +152,22 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         }
     }
 
-    // TODO: Proper error handling
-    // TODO: Function calls
+    fn if_else(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+        self.eat(tok![if])?;
+        let expr = self.expr()?;
+        let then_block = self.block()?;
+        if self.accept(tok![else])? {
+            let else_block = self.block()?;
+            Ok(Expr::If(
+                self.alloc(expr),
+                self.alloc(then_block),
+                Some(self.alloc(else_block)),
+            ))
+        } else {
+            Ok(Expr::If(self.alloc(expr), self.alloc(then_block), None))
+        }
+    }
+
     fn expr(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         self.disjunction()
     }
@@ -258,6 +278,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
             return Ok(Expr::Block(self.alloc(expr)));
         }
 
+        if self.accept_peek(tok![if])? {
+            return self.if_else();
+        }
+
         let expr = match self.next()? {
             Token::Ident(s) => Expr::Ident(Ident { string: s }),
             Token::False => Expr::Lit(Lit::Bool(false)),
@@ -320,6 +344,16 @@ impl<'source, 'arena> Parser<'source, 'arena> {
                 let expr = self.expr()?;
                 self.eat(tok![;])?;
                 vec.push(Statement::Let(ident, self.alloc(expr)));
+            } else if self.accept_peek(tok![if])? {
+                let expr = self.if_else()?;
+                if self.accept(Token::CurlyRight)? {
+                    return Ok(Block {
+                        stmts: vec.into_bump_slice(),
+                        last: Some(expr),
+                    });
+                }
+                self.accept(tok![;])?;
+                vec.push(Statement::Expr(self.alloc(expr)));
             } else {
                 let expr = self.expr()?;
                 if self.accept(tok![;])? {
@@ -359,12 +393,12 @@ mod test {
     }
 
     macro_rules! assert_expr_matches {
-        ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
+        ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {{
             let arena = Bump::new();
             let mut p = Parser::new($source, &arena);
             let e = p.expr().unwrap();
             assert_matches!(e, $pattern $(if $guard)?)
-        }
+        }}
     }
 
     macro_rules! int {
@@ -488,6 +522,52 @@ mod test {
     }
 
     #[test]
+    fn if_else() {
+        assert_expr_matches!(
+            "if 1 { 2 } else { 3 }",
+            Expr::If(
+                int!(1),
+                Block {
+                    stmts: &[],
+                    last: Some(int!(2))
+                },
+                Some(Block {
+                    stmts: &[],
+                    last: Some(int!(3))
+                })
+            )
+        );
+        assert_expr_matches!(
+            "(if 1 { 2 } else { 3 } + 4)",
+            Expr::Add(
+                Expr::If(
+                    int!(1),
+                    Block {
+                        stmts: &[],
+                        last: Some(int!(2))
+                    },
+                    Some(Block {
+                        stmts: &[],
+                        last: Some(int!(3))
+                    })
+                ),
+                int!(4)
+            )
+        );
+        assert_expr_matches!(
+            "if 1 { 2 }",
+            Expr::If(
+                int!(1),
+                Block {
+                    stmts: &[],
+                    last: Some(int!(2))
+                },
+                None,
+            )
+        );
+    }
+
+    #[test]
     fn blocks() {
         assert_expr_matches!(
             "{}",
@@ -522,6 +602,85 @@ mod test {
             Expr::Block(Block {
                 stmts: &[Statement::Let(Ident { string: "x" }, int!(10))],
                 last: Some(Expr::Ident(Ident { string: "x" })),
+            })
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } 3 }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(Expr::If(
+                    int!(1),
+                    &Block {
+                        stmts: &[],
+                        last: Some(int!(2)),
+                    },
+                    None
+                ))],
+                last: Some(int!(3)),
+            })
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 }; 3 }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(Expr::If(
+                    int!(1),
+                    &Block {
+                        stmts: &[],
+                        last: Some(int!(2)),
+                    },
+                    None
+                ))],
+                last: Some(int!(3)),
+            })
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } else { 3 } 4 }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(Expr::If(
+                    int!(1),
+                    &Block {
+                        stmts: &[],
+                        last: Some(int!(2)),
+                    },
+                    Some(&Block {
+                        stmts: &[],
+                        last: Some(int!(3)),
+                    }),
+                ))],
+                last: Some(int!(4)),
+            })
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } else { 3 }; 4 }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(Expr::If(
+                    int!(1),
+                    &Block {
+                        stmts: &[],
+                        last: Some(int!(2)),
+                    },
+                    Some(&Block {
+                        stmts: &[],
+                        last: Some(int!(3)),
+                    }),
+                ))],
+                last: Some(int!(4)),
+            })
+        );
+        assert_expr_matches!(
+            "{ 1; if 2 { 3 } else { 4 } }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(int!(1))],
+                last: Some(Expr::If(
+                    int!(2),
+                    &Block {
+                        stmts: &[],
+                        last: Some(int!(3)),
+                    },
+                    Some(&Block {
+                        stmts: &[],
+                        last: Some(int!(4)),
+                    }),
+                )),
             })
         );
     }
