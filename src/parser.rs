@@ -112,6 +112,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         self.arena.alloc(x)
     }
 
+    /// Progress the parser and return the next token
     fn next(&mut self) -> ParseResult<Token<'source>> {
         match self.lexer.next() {
             Some(Ok(t)) => Ok(t),
@@ -120,6 +121,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         }
     }
 
+    /// Return the next token without progressing the parser
     fn peek(&mut self) -> ParseResult<Option<Token<'source>>> {
         match self.lexer.peek() {
             Some(Ok(t)) => Ok(Some(*t)),
@@ -128,15 +130,8 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         }
     }
 
-    fn accept(&mut self, token: Token) -> ParseResult<bool> {
-        let res = self.accept_peek(token)?;
-        if res {
-            self.next()?;
-        }
-        Ok(res)
-    }
-
-    fn accept_peek(&mut self, token: Token) -> ParseResult<bool> {
+    /// Return whether the next token is equal to the given token without progressing the parser
+    fn peek_is(&mut self, token: Token) -> ParseResult<bool> {
         let Some(lexed_token) = self.peek()? else {
             return Ok(false);
         };
@@ -144,19 +139,31 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         Ok(token == lexed_token)
     }
 
-    fn eat(&mut self, token: Token) -> ParseResult<()> {
+    /// Check whether the next token is equal to the given token and progress if it is.
+    fn accept_optional(&mut self, token: Token) -> ParseResult<bool> {
+        let res = self.peek_is(token)?;
+        if res {
+            self.next()?;
+        }
+        Ok(res)
+    }
+
+    /// Progress to the next token, asserting that it is equal to the given token
+    fn accept_required(&mut self, token: Token) -> ParseResult<()> {
         if self.next()? == token {
             Ok(())
         } else {
             Err(ParseError::Expected)
         }
     }
+}
 
+impl<'source, 'arena> Parser<'source, 'arena> {
     fn if_else(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        self.eat(tok![if])?;
+        self.accept_required(tok![if])?;
         let expr = self.expr()?;
         let then_block = self.block()?;
-        if self.accept(tok![else])? {
+        if self.accept_optional(tok![else])? {
             let else_block = self.block()?;
             Ok(Expr::If(
                 self.alloc(expr),
@@ -174,7 +181,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
 
     fn disjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.conjunction()?;
-        while self.accept(tok![||])? {
+        while self.accept_optional(tok![||])? {
             let right = self.conjunction()?;
             left = Expr::LogicalOr(self.alloc(left), self.alloc(right));
         }
@@ -185,7 +192,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     //             | inversion
     fn conjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.comparison()?;
-        while self.accept(tok![&&])? {
+        while self.accept_optional(tok![&&])? {
             let right = self.comparison()?;
             left = Expr::LogicalAnd(self.alloc(left), self.alloc(right));
         }
@@ -203,7 +210,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
             (tok![<], Expr::Lt),
         ];
         for (t, f) in tokens {
-            if self.accept(*t)? {
+            if self.accept_optional(*t)? {
                 let right = self.inversion()?;
                 return Ok(f(self.alloc(left), self.alloc(right)));
             }
@@ -215,7 +222,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     //           | sum
     // TODO: this should go to comparison
     fn inversion(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        if self.accept(tok![!])? {
+        if self.accept_optional(tok![!])? {
             let arg = self.inversion()?;
             Ok(Expr::Not(self.alloc(arg)))
         } else {
@@ -229,10 +236,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn sum(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.term()?;
         loop {
-            if self.accept(tok![+])? {
+            if self.accept_optional(tok![+])? {
                 let right = self.term()?;
                 left = Expr::Add(self.alloc(left), self.alloc(right));
-            } else if self.accept(tok![-])? {
+            } else if self.accept_optional(tok![-])? {
                 let right = self.term()?;
                 left = Expr::Sub(self.alloc(left), self.alloc(right));
             } else {
@@ -247,10 +254,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     fn term(&mut self) -> ParseResult<Expr<'source, 'arena>> {
         let mut left = self.factor()?;
         loop {
-            if self.accept(tok![*])? {
+            if self.accept_optional(tok![*])? {
                 let right = self.factor()?;
                 left = Expr::Mul(self.alloc(left), self.alloc(right));
-            } else if self.accept(tok![/])? {
+            } else if self.accept_optional(tok![/])? {
                 let right = self.factor()?;
                 left = Expr::Div(self.alloc(left), self.alloc(right));
             } else {
@@ -262,7 +269,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // factor = '-' atom
     //        | atom
     fn factor(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        if self.accept(tok![-])? {
+        if self.accept_optional(tok![-])? {
             let arg = self.atom()?;
             Ok(Expr::Neg(self.alloc(arg)))
         } else {
@@ -271,14 +278,14 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     fn atom(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        if self.accept_peek(Token::RoundLeft)? {
+        if self.peek_is(Token::RoundLeft)? {
             return self.paren();
-        } else if self.accept_peek(Token::CurlyLeft)? {
+        } else if self.peek_is(Token::CurlyLeft)? {
             let expr = self.block()?;
             return Ok(Expr::Block(self.alloc(expr)));
         }
 
-        if self.accept_peek(tok![if])? {
+        if self.peek_is(tok![if])? {
             return self.if_else();
         }
 
@@ -295,30 +302,30 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     fn paren(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        self.eat(Token::RoundLeft)?;
+        self.accept_required(Token::RoundLeft)?;
 
-        if self.accept(Token::RoundRight)? {
+        if self.accept_optional(Token::RoundRight)? {
             return Ok(Expr::Tuple(&[]));
         }
 
         let expr = self.expr()?;
 
-        if self.accept(Token::RoundRight)? {
+        if self.accept_optional(Token::RoundRight)? {
             return Ok(expr);
         }
 
         let mut vec = Vec::new_in(self.arena);
         vec.push(expr);
 
-        while self.accept(tok![,])? {
-            if self.accept(Token::RoundRight)? {
+        while self.accept_optional(tok![,])? {
+            if self.accept_optional(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
                 return Ok(Expr::Tuple(slice));
             }
             vec.push(self.expr()?);
         }
 
-        if self.accept(Token::RoundRight)? {
+        if self.accept_optional(Token::RoundRight)? {
             let slice = vec.into_bump_slice();
             Ok(Expr::Tuple(slice))
         } else {
@@ -327,39 +334,39 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     }
 
     fn block(&mut self) -> ParseResult<Block<'source, 'arena>> {
-        self.eat(Token::CurlyLeft)?;
+        self.accept_required(Token::CurlyLeft)?;
 
         let mut vec = Vec::new_in(self.arena);
 
         loop {
-            if self.accept(Token::CurlyRight)? {
+            if self.accept_optional(Token::CurlyRight)? {
                 return Ok(Block {
                     stmts: vec.into_bump_slice(),
                     last: None,
                 });
             }
-            if self.accept(tok![let])? {
+            if self.accept_optional(tok![let])? {
                 let ident = self.ident()?;
-                self.eat(tok![=])?;
+                self.accept_required(tok![=])?;
                 let expr = self.expr()?;
-                self.eat(tok![;])?;
+                self.accept_required(tok![;])?;
                 vec.push(Statement::Let(ident, self.alloc(expr)));
-            } else if self.accept_peek(tok![if])? {
+            } else if self.peek_is(tok![if])? {
                 let expr = self.if_else()?;
-                if self.accept(Token::CurlyRight)? {
+                if self.accept_optional(Token::CurlyRight)? {
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
                     });
                 }
-                self.accept(tok![;])?;
+                self.accept_optional(tok![;])?;
                 vec.push(Statement::Expr(self.alloc(expr)));
             } else {
                 let expr = self.expr()?;
-                if self.accept(tok![;])? {
+                if self.accept_optional(tok![;])? {
                     vec.push(Statement::Expr(self.alloc(expr)));
                 } else {
-                    self.eat(Token::CurlyRight)?;
+                    self.accept_required(Token::CurlyRight)?;
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
@@ -538,7 +545,7 @@ mod test {
             )
         );
         assert_expr_matches!(
-            "(if 1 { 2 } else { 3 } + 4)",
+            "if 1 { 2 } else { 3 } + 4",
             Expr::Add(
                 Expr::If(
                     int!(1),
