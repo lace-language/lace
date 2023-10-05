@@ -1,21 +1,20 @@
 use std::ops::{Deref, DerefMut};
 
 pub trait WithSpan {
-    fn with_span(self, span: Span) -> Spanned<Self> where Self: Sized;
+    fn with_span(self, span: Span) -> Spanned<Self>
+    where
+        Self: Sized;
 }
 
 impl<T> WithSpan for T {
     fn with_span(self, span: Span) -> Spanned<Self> {
-        Spanned {
-            span,
-            value: self,
-        }
+        Spanned { span, value: self }
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Spanned<T> {
-    span: Span,
+    pub span: Span,
     pub value: T,
 }
 
@@ -39,7 +38,7 @@ impl<T> Spanned<T> {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Span {
     offset: u32,
     length: u32,
@@ -53,10 +52,7 @@ impl From<logos::Span> for Span {
 
 impl Span {
     pub fn new(offset: u32, length: u32) -> Self {
-        Self::Span {
-            offset,
-            length,
-        }
+        Self { offset, length }
     }
 
     /// Merges two spans, creating a new span that encompasses both spans.
@@ -93,33 +89,22 @@ mod tests {
         let span_a = Span::new(0, 10);
         let span_b = Span::new(10, 10);
 
-        assert_eq!(span_a.merge(&span_b), Some(Span::new(0, 20, SourceID(1))));
-    }
-
-    #[test]
-    fn merge_different_source() {
-        let span_a = Span::new(0, 10, SourceID(0));
-        let span_b = Span::new(10, 10, SourceID(1));
-
-        assert_eq!(span_a.merge(&span_b), None);
+        assert_eq!(span_a.merge(&span_b), Span::new(0, 20));
     }
 
     #[test]
     fn merge_hole() {
-        let span_a = Span::new(0, 10, SourceID(0));
-        let span_b = Span::new(20, 10, SourceID(0));
+        let span_a = Span::new(0, 10);
+        let span_b = Span::new(20, 10);
 
-        assert_eq!(span_a.merge(&span_b), Some(Span::new(0, 30, SourceID(0))));
+        assert_eq!(span_a.merge(&span_b), Span::new(0, 30));
     }
 
     #[test]
     fn merge_reverse() {
-        let span_a = Span::new(10, 10, SourceID(0));
-        let span_b = Span::new(30, 10, SourceID(0));
+        let span_a = Span::new(10, 10);
+        let span_b = Span::new(30, 10);
 
-        assert_eq!(span_b.merge(&span_a), Some(Span::new(10, 30, SourceID(0))));
+        assert_eq!(span_b.merge(&span_a), Span::new(10, 30));
     }
 }
-
-
-

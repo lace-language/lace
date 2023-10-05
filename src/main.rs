@@ -1,9 +1,9 @@
+mod ice;
 mod lexer;
 mod parser;
-mod ice;
 
-use bumpalo::Bump;
 use crate::parser::parser::Parser;
+use bumpalo::Bump;
 
 fn main() {
     let arena = Bump::new();

@@ -1,9 +1,9 @@
 use std::iter::Peekable;
 
-use crate::parser::ast::{Block, Expr, ExprKind, Ident, Lit, Statement};
 use crate::lexer::{Lexer, Token};
+use crate::parser::ast::{Block, Expr, ExprKind, Ident, Lit, Statement};
+use crate::parser::span::{Span, WithSpan};
 use bumpalo::{collections::Vec, Bump};
-use crate::parser::span::{Span, Spanned, WithSpan};
 
 macro_rules! tok {
     (&&) => {
@@ -159,8 +159,8 @@ impl<'s, 'a> Parser<'s, 'a> {
         let mut left = self.conjunction()?;
         while self.accept(tok![||])?.is_some() {
             let right = self.conjunction()?;
-            left = ExprKind::LogicalOr(self.alloc(left), self.alloc(right))
-                .with_span(left.span().merge(right.span()));
+            let span = left.span().merge(right.span());
+            left = ExprKind::LogicalOr(self.alloc(left), self.alloc(right)).with_span(span)
         }
         Ok(left)
     }
@@ -171,8 +171,8 @@ impl<'s, 'a> Parser<'s, 'a> {
         let mut left = self.comparison()?;
         while self.accept(tok![&&])?.is_some() {
             let right = self.comparison()?;
-            left = ExprKind::LogicalAnd(self.alloc(left), self.alloc(right))
-                .with_span(left.span().merge(right.span()));
+            let span = left.span().merge(right.span());
+            left = ExprKind::LogicalAnd(self.alloc(left), self.alloc(right)).with_span(span);
         }
         Ok(left)
     }
@@ -190,7 +190,8 @@ impl<'s, 'a> Parser<'s, 'a> {
         for (t, f) in tokens {
             if self.accept(*t)?.is_some() {
                 let right = self.inversion()?;
-                return Ok(f(self.alloc(left), self.alloc(right)).with_span(left.span().merge(right.span())));
+                let span = left.span().merge(right.span());
+                return Ok(f(self.alloc(left), self.alloc(right)).with_span(span));
             }
         }
         Ok(left)
@@ -202,7 +203,8 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept(tok![!])? {
             let arg = self.inversion()?;
-            Ok(ExprKind::Not(self.alloc(arg)).with_span(span.merge(&arg.span())))
+            let span = span.merge(arg.span());
+            Ok(ExprKind::Not(self.alloc(arg)).with_span(span))
         } else {
             self.sum()
         }
@@ -216,10 +218,12 @@ impl<'s, 'a> Parser<'s, 'a> {
         loop {
             if self.accept(tok![+])?.is_some() {
                 let right = self.term()?;
-                left = ExprKind::Add(self.alloc(left), self.alloc(right)).with_span(left.span().merge(right.span()));
+                let span = left.span().merge(right.span());
+                left = ExprKind::Add(self.alloc(left), self.alloc(right)).with_span(span);
             } else if self.accept(tok![-])?.is_some() {
                 let right = self.term()?;
-                left = ExprKind::Sub(self.alloc(left), self.alloc(right)).with_span(left.span().merge(right.span()));
+                let span = left.span().merge(right.span());
+                left = ExprKind::Sub(self.alloc(left), self.alloc(right)).with_span(span);
             } else {
                 return Ok(left);
             }
@@ -234,12 +238,12 @@ impl<'s, 'a> Parser<'s, 'a> {
         loop {
             if self.accept(tok![*])?.is_some() {
                 let right = self.factor()?;
-                left = ExprKind::Mul(self.alloc(left), self.alloc(right))
-                    .with_span(left.span().merge(right.span()));
+                let span = left.span().merge(right.span());
+                left = ExprKind::Mul(self.alloc(left), self.alloc(right)).with_span(span);
             } else if self.accept(tok![/])?.is_some() {
                 let right = self.factor()?;
-                left = ExprKind::Div(self.alloc(left), self.alloc(right))
-                    .with_span(left.span().merge(right.span()));
+                let span = left.span().merge(right.span());
+                left = ExprKind::Div(self.alloc(left), self.alloc(right)).with_span(span);
             } else {
                 return Ok(left);
             }
@@ -251,7 +255,8 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept(tok![-])? {
             let arg = self.atom()?;
-            Ok(ExprKind::Neg(self.alloc(arg)).with_span(span.merge(arg.span())))
+            let span = span.merge(arg.span());
+            Ok(ExprKind::Neg(self.alloc(arg)).with_span(span))
         } else {
             self.atom()
         }
@@ -280,32 +285,33 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn paren(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        self.eat(Token::RoundLeft)?;
+        let start_span = self.eat(Token::RoundLeft)?;
 
-        if self.accept(Token::RoundRight)? {
-            return Ok(Expr::Tuple(&[]));
+        if let Some(end_span) = self.accept(Token::RoundRight)? {
+            return Ok(ExprKind::Tuple(&[]).with_span(start_span.merge(&end_span)));
         }
 
         let expr = self.expr()?;
 
-        if self.accept(Token::RoundRight)? {
+        // TODO: Add parentheses to AST
+        if self.accept(Token::RoundRight)?.is_some() {
             return Ok(expr);
         }
 
         let mut vec = Vec::new_in(self.arena);
         vec.push(expr);
 
-        while self.accept(tok![,])? {
-            if self.accept(Token::RoundRight)? {
+        while self.accept(tok![,])?.is_some() {
+            if let Some(end_span) = self.accept(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
-                return Ok(Expr::Tuple(slice));
+                return Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)));
             }
             vec.push(self.expr()?);
         }
 
-        if self.accept(Token::RoundRight)? {
+        if let Some(end_span) = self.accept(Token::RoundRight)? {
             let slice = vec.into_bump_slice();
-            Ok(Expr::Tuple(slice))
+            Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)))
         } else {
             Err(ParseError::Expected)
         }
@@ -321,10 +327,11 @@ impl<'s, 'a> Parser<'s, 'a> {
                 return Ok(Block {
                     stmts: vec.into_bump_slice(),
                     last: None,
-                    span: open_span.merge(&close_span)
+                    span: open_span.merge(&close_span),
                 });
             }
-            if self.accept(tok![let])? {
+            // TODO: Spans for statements
+            if self.accept(tok![let])?.is_some() {
                 let ident = self.ident()?;
                 self.eat(tok![=])?;
                 let expr = self.expr()?;
@@ -332,14 +339,14 @@ impl<'s, 'a> Parser<'s, 'a> {
                 vec.push(Statement::Let(ident, self.alloc(expr)));
             } else {
                 let expr = self.expr()?;
-                if self.accept(tok![;])? {
+                if self.accept(tok![;])?.is_some() {
                     vec.push(Statement::Expr(self.alloc(expr)));
                 } else {
                     let close_span = self.eat(Token::CurlyRight)?;
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
-                        span: open_span.merge(&close_span)
+                        span: open_span.merge(&close_span),
                     });
                 }
             }
@@ -347,7 +354,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn ident(&mut self) -> ParseResult<Ident<'s>> {
-        match self.next()? {
+        match self.next()?.0 {
             Token::Ident(s) => Ok(Ident { string: s }),
             _ => Err(ParseError::Expected),
         }
@@ -357,7 +364,8 @@ impl<'s, 'a> Parser<'s, 'a> {
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use crate::parser::ast::{Block, Expr, Ident, Lit, Statement};
+    use crate::parser::ast::{Block, ExprKind, Ident, Lit, Statement};
+    use crate::parser::span::Spanned;
     use bumpalo::Bump;
 
     macro_rules! assert_matches {
@@ -378,16 +386,158 @@ mod test {
         }
     }
 
+    macro_rules! spanned {
+        ($x:pat) => {
+            Spanned { value: $x, .. }
+        };
+    }
+
     macro_rules! int {
         ($i:literal) => {
-            Expr::Lit(Lit::Int(stringify!($i)))
+            spanned!(ExprKind::Lit(Lit::Int(stringify!($i))))
+        };
+    }
+
+    macro_rules! string {
+        ($i:literal) => {
+            spanned!(ExprKind::Lit(Lit::String($i)))
+        };
+    }
+
+    macro_rules! ident {
+        ($i:ident) => {
+            spanned!(ExprKind::Ident(Ident {
+                string: stringify!($i),
+            }))
         };
     }
 
     macro_rules! bool {
         ($i:literal) => {
-            Expr::Lit(Lit::Bool($i))
+            spanned!(ExprKind::Lit(Lit::Bool($i)))
         };
+    }
+
+    macro_rules! neg {
+        ($x:pat) => {
+            spanned!(ExprKind::Neg($x))
+        };
+    }
+
+    macro_rules! not {
+        ($x:pat) => {
+            spanned!(ExprKind::Not($x))
+        };
+    }
+
+    macro_rules! and {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::LogicalAnd($x, $y))
+        };
+    }
+
+    macro_rules! or {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::LogicalOr($x, $y))
+        };
+    }
+
+    macro_rules! add {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Add($x, $y))
+        };
+    }
+
+    macro_rules! sub {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Sub($x, $y))
+        };
+    }
+
+    macro_rules! mul {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Mul($x, $y))
+        };
+    }
+
+    macro_rules! div {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Div($x, $y))
+        };
+    }
+
+    macro_rules! gt {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Gt($x, $y))
+        };
+    }
+
+    macro_rules! gte {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Gte($x, $y))
+        };
+    }
+
+    macro_rules! lt {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Lt($x, $y))
+        };
+    }
+
+    macro_rules! lte {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Lte($x, $y))
+        };
+    }
+
+    macro_rules! eq {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Eq($x, $y))
+        };
+    }
+
+    macro_rules! neq {
+        ($x:pat, $y:pat) => {
+            spanned!(ExprKind::Neq($x, $y))
+        };
+    }
+
+    macro_rules! tuple {
+        ($($x:pat),*) => {
+            spanned!(ExprKind::Tuple(&[$($x),*]))
+        };
+    }
+
+    macro_rules! exp {
+        ($x:pat) => {
+            Statement::Expr($x)
+        };
+    }
+
+    macro_rules! let_ {
+        ($x:ident, $exp:pat) => {
+            Statement::Let(
+                Ident {
+                    string: stringify!(x),
+                },
+                $exp,
+            )
+        };
+    }
+
+    macro_rules! block {
+        // () => {
+        //     spanned!(ExprKind::Block(Block { stmts: &[], last: None, .. }))
+        // };
+        ($($stmts:pat),*) => {
+            spanned!(ExprKind::Block(Block { stmts: &[$($stmts),*], last: None, .. }))
+        };
+        ($($stmts:pat),* => $exp:pat) => {
+            spanned!(ExprKind::Block(Block { stmts: &[$($stmts),*], last: Some($exp), .. }))
+        };
+
+
+
     }
 
     #[test]
@@ -406,143 +556,107 @@ mod test {
 
     #[test]
     fn unary() {
-        assert_expr_matches!("- 2", Expr::Neg(int!(2)));
+        assert_expr_matches!("- 2", neg!(int!(2)));
     }
 
     #[test]
     fn logical() {
-        assert_expr_matches!("!true", Expr::Not(bool!(true)));
-        assert_expr_matches!("!false", Expr::Not(bool!(false)));
-        assert_expr_matches!("true && false", Expr::LogicalAnd(bool!(true), bool!(false)));
+        assert_expr_matches!("!true", not!(bool!(true)));
+        assert_expr_matches!("!false", not!(bool!(false)));
+        assert_expr_matches!("true && false", and!(bool!(true), bool!(false)));
         assert_expr_matches!(
             "true && false && false",
-            Expr::LogicalAnd(Expr::LogicalAnd(bool!(true), bool!(false)), bool!(false))
+            and!(and!(bool!(true), bool!(false)), bool!(false))
         );
-        assert_expr_matches!("true || false", Expr::LogicalOr(bool!(true), bool!(false)));
+        assert_expr_matches!("true || false", or!(bool!(true), bool!(false)));
         assert_expr_matches!(
             "true || false || false",
-            Expr::LogicalOr(Expr::LogicalOr(bool!(true), bool!(false)), bool!(false))
+            or!(or!(bool!(true), bool!(false)), bool!(false))
         );
         assert_expr_matches!(
             "true && false || false",
-            Expr::LogicalOr(Expr::LogicalAnd(bool!(true), bool!(false)), bool!(false))
+            or!(and!(bool!(true), bool!(false)), bool!(false))
         );
         assert_expr_matches!(
             "true || false && false",
-            Expr::LogicalOr(bool!(true), Expr::LogicalAnd(bool!(false), bool!(false)))
+            or!(bool!(true), and!(bool!(false), bool!(false)))
         );
         assert_expr_matches!(
             "true || !false && false",
-            Expr::LogicalOr(
-                bool!(true),
-                Expr::LogicalAnd(Expr::Not(bool!(false)), bool!(false))
-            )
+            or!(bool!(true), and!(not!(bool!(false)), bool!(false)))
         );
     }
 
     #[test]
     fn arithmetic_binop() {
-        assert_expr_matches!("2 + 3", Expr::Add(int!(2), int!(3)));
-        assert_expr_matches!("2 + 3 + 4", Expr::Add(Expr::Add(int!(2), int!(3)), int!(4)));
-        assert_expr_matches!("2 - 3", Expr::Sub(int!(2), int!(3)));
-        assert_expr_matches!("2 - 3 - 4", Expr::Sub(Expr::Sub(int!(2), int!(3)), int!(4)));
-        assert_expr_matches!("2 * 3", Expr::Mul(int!(2), int!(3)));
-        assert_expr_matches!("2 * 3 * 4", Expr::Mul(Expr::Mul(int!(2), int!(3)), int!(4)));
-        assert_expr_matches!("2 / 3", Expr::Div(int!(2), int!(3)));
-        assert_expr_matches!("2 / 3 / 4", Expr::Div(Expr::Div(int!(2), int!(3)), int!(4)));
+        assert_expr_matches!("2 + 3", add!(int!(2), int!(3)));
+        assert_expr_matches!("2 + 3 + 4", add!(add!(int!(2), int!(3)), int!(4)));
+        assert_expr_matches!("2 - 3", sub!(int!(2), int!(3)));
+        assert_expr_matches!("2 - 3 - 4", sub!(sub!(int!(2), int!(3)), int!(4)));
+        assert_expr_matches!("2 * 3", mul!(int!(2), int!(3)));
+        assert_expr_matches!("2 * 3 * 4", mul!(mul!(int!(2), int!(3)), int!(4)));
+        assert_expr_matches!("2 / 3", div!(int!(2), int!(3)));
+        assert_expr_matches!("2 / 3 / 4", div!(div!(int!(2), int!(3)), int!(4)));
         assert_expr_matches!(
             "2 / 3 + 4 * 5",
-            Expr::Add(Expr::Div(int!(2), int!(3)), Expr::Mul(int!(4), int!(5)))
+            add!(div!(int!(2), int!(3)), mul!(int!(4), int!(5)))
         );
-        assert_expr_matches!("2 + 3 * 4", Expr::Add(int!(2), Expr::Mul(int!(3), int!(4))));
-        assert_expr_matches!(
-            "(2 + 3) * 4",
-            Expr::Mul(Expr::Add(int!(2), int!(3)), int!(4))
-        );
+        assert_expr_matches!("2 + 3 * 4", add!(int!(2), mul!(int!(3), int!(4))));
+        assert_expr_matches!("(2 + 3) * 4", mul!(add!(int!(2), int!(3)), int!(4)));
     }
 
     #[test]
     fn tuples() {
-        assert_expr_matches!("()", Expr::Tuple(&[]));
+        assert_expr_matches!("()", tuple!());
         assert_expr_matches!("(1)", int!(1));
-        assert_expr_matches!("(1,)", Expr::Tuple(&[int!(1)]));
-        assert_expr_matches!("(1,2)", Expr::Tuple(&[int!(1), int!(2)]));
-        assert_expr_matches!("(1,2,)", Expr::Tuple(&[int!(1), int!(2)]));
-        assert_expr_matches!("(1,2,3)", Expr::Tuple(&[int!(1), int!(2), int!(3)]));
-        assert_expr_matches!(
-            "((1,2,3),)",
-            Expr::Tuple(&[Expr::Tuple(&[int!(1), int!(2), int!(3)])])
-        );
+        assert_expr_matches!("(1,)", tuple!(int!(1)));
+        assert_expr_matches!("(1,2)", tuple!(int!(1), int!(2)));
+        assert_expr_matches!("(1,2,)", tuple!(int!(1), int!(2)));
+        assert_expr_matches!("(1,2,3)", tuple!(int!(1), int!(2), int!(3)));
+        assert_expr_matches!("((1,2,3),)", tuple!(tuple!(int!(1), int!(2), int!(3))));
     }
 
     #[test]
     fn comparisons() {
-        assert_expr_matches!("1 <= 2", Expr::Lte(int!(1), int!(2)));
-        assert_expr_matches!("1 >= 2", Expr::Gte(int!(1), int!(2)));
-        assert_expr_matches!("1 < 2", Expr::Lt(int!(1), int!(2)));
-        assert_expr_matches!("1 > 2", Expr::Gt(int!(1), int!(2)));
-        assert_expr_matches!("1 == 2", Expr::Eq(int!(1), int!(2)));
-        assert_expr_matches!("1 != 2", Expr::Neq(int!(1), int!(2)));
+        assert_expr_matches!("1 <= 2", lte!(int!(1), int!(2)));
+        assert_expr_matches!("1 >= 2", gte!(int!(1), int!(2)));
+        assert_expr_matches!("1 < 2", lt!(int!(1), int!(2)));
+        assert_expr_matches!("1 > 2", gt!(int!(1), int!(2)));
+        assert_expr_matches!("1 == 2", eq!(int!(1), int!(2)));
+        assert_expr_matches!("1 != 2", neq!(int!(1), int!(2)));
     }
 
     #[test]
     fn ident() {
-        assert_expr_matches!("foo", Expr::Ident(Ident { string: "foo" }));
-        assert_expr_matches!("bar", Expr::Ident(Ident { string: "bar" }));
-        assert_expr_matches!(
-            "x != y",
-            Expr::Neq(
-                Expr::Ident(Ident { string: "x" }),
-                Expr::Ident(Ident { string: "y" }),
-            )
-        );
+        assert_expr_matches!("foo", ident!(foo));
+        assert_expr_matches!("bar", ident!(bar));
+        assert_expr_matches!("x != y", neq!(ident!(x), ident!(y)));
     }
 
     #[test]
     fn blocks() {
-        assert_expr_matches!(
-            "{}",
-            Expr::Block(Block {
-                stmts: &[],
-                last: None
-            })
-        );
-        assert_expr_matches!(
-            "{ 10 }",
-            Expr::Block(Block {
-                stmts: &[],
-                last: Some(int!(10)),
-            })
-        );
-        assert_expr_matches!(
-            "{ 10; }",
-            Expr::Block(Block {
-                stmts: &[Statement::Expr(int!(10))],
-                last: None,
-            })
-        );
+        assert_expr_matches!("{}", block! {});
+        assert_expr_matches!("{ 10 }", block! { => int!(10) });
+        assert_expr_matches!("{ 10; }", block! { exp!(int!(10)) });
         assert_expr_matches!(
             "{ 10; 20 }",
-            Expr::Block(Block {
-                stmts: &[Statement::Expr(int!(10))],
-                last: Some(int!(20)),
-            })
+            block! {
+                exp!(int!(10))
+                => int!(20)
+            }
         );
         assert_expr_matches!(
             "{ let x = 10; x }",
-            Expr::Block(Block {
-                stmts: &[Statement::Let(Ident { string: "x" }, int!(10))],
-                last: Some(Expr::Ident(Ident { string: "x" })),
-            })
+            block! {
+                let_!(x, int!(10))
+                => ident!(x)
+            }
         );
     }
 
     #[test]
     fn strings() {
-        assert_expr_matches!(
-            "\"Hello, world!\"",
-            Expr::Lit(Lit::String("\"Hello, world!\"")),
-        );
-        assert_expr_matches!("\"\"", Expr::Lit(Lit::String("\"\"")));
+        assert_expr_matches!("\"Hello, world!\"", string!("\"Hello, world!\""));
+        assert_expr_matches!("\"\"", string!("\"\""));
     }
 }
