@@ -1,6 +1,6 @@
-use logos::Logos;
+use logos::{Logos, SpannedIter};
 
-pub type Lexer<'source> = logos::Lexer<'source, Token<'source>>;
+pub type Lexer<'s> = SpannedIter<'s, Token<'s>>;
 
 #[derive(Logos, Clone, Copy, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f]+")]

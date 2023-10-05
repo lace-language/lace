@@ -1,8 +1,9 @@
 use std::iter::Peekable;
 
-use crate::ast::{Block, Expr, Ident, Lit, Statement};
+use crate::parser::ast::{Block, Expr, ExprKind, Ident, Lit, Statement};
 use crate::lexer::{Lexer, Token};
 use bumpalo::{collections::Vec, Bump};
+use crate::parser::span::{Span, Spanned, WithSpan};
 
 macro_rules! tok {
     (&&) => {
@@ -83,51 +84,52 @@ pub enum ParseError {
     UnrecognizedToken(()),
 }
 
-pub struct Parser<'source, 'arena> {
-    _source: &'source str,
-    lexer: Peekable<Lexer<'source>>,
-    arena: &'arena Bump,
+pub struct Parser<'s, 'a> {
+    _source: &'s str,
+    lexer: Peekable<Lexer<'s>>,
+    arena: &'a Bump,
 }
 
-impl<'source, 'arena> Parser<'source, 'arena> {
-    pub fn new(source: &'source str, arena: &'arena Bump) -> Self {
+impl<'s, 'a> Parser<'s, 'a> {
+    pub fn new(source: &'s str, arena: &'a Bump) -> Self {
         Self {
             _source: source,
-            lexer: Lexer::new(source).peekable(),
+            lexer: logos::Lexer::new(source).spanned().peekable(),
             arena,
         }
     }
 
-    pub fn parse(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    pub fn parse(&mut self) -> ParseResult<Expr<'s, 'a>> {
         self.expr()
     }
 
-    fn alloc<T>(&mut self, x: T) -> &'arena T {
+    fn alloc<T>(&mut self, x: T) -> &'a T {
         self.arena.alloc(x)
     }
 
-    fn next(&mut self) -> ParseResult<Token<'source>> {
+    fn next(&mut self) -> ParseResult<(Token<'s>, Span)> {
         match self.lexer.next() {
-            Some(Ok(t)) => Ok(t),
-            Some(Err(_)) => Err(ParseError::UnrecognizedToken(())),
+            Some((Ok(t), s)) => Ok((t, s.into())),
+            Some((Err(_), _)) => Err(ParseError::UnrecognizedToken(())),
             None => Err(ParseError::EndOfInput),
         }
     }
 
-    fn peek(&mut self) -> ParseResult<Option<Token<'source>>> {
+    fn peek(&mut self) -> ParseResult<Option<Token<'s>>> {
         match self.lexer.peek() {
-            Some(Ok(t)) => Ok(Some(*t)),
-            Some(Err(_)) => Err(ParseError::UnrecognizedToken(())),
+            Some((Ok(t), _)) => Ok(Some(*t)),
+            Some((Err(_), _)) => Err(ParseError::UnrecognizedToken(())),
             None => Ok(None),
         }
     }
 
-    fn accept(&mut self, token: Token) -> ParseResult<bool> {
+    fn accept(&mut self, token: Token) -> ParseResult<Option<Span>> {
         let res = self.accept_peek(token)?;
         if res {
-            self.next()?;
+            Ok(Some(self.next()?.1))
+        } else {
+            Ok(None)
         }
-        Ok(res)
     }
 
     fn accept_peek(&mut self, token: Token) -> ParseResult<bool> {
@@ -138,9 +140,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         Ok(token == lexed_token)
     }
 
-    fn eat(&mut self, token: Token) -> ParseResult<()> {
-        if self.next()? == token {
-            Ok(())
+    fn eat(&mut self, token: Token) -> ParseResult<Span> {
+        let (next, span) = self.next()?;
+        if next == token {
+            Ok(span)
         } else {
             Err(ParseError::Expected)
         }
@@ -148,44 +151,46 @@ impl<'source, 'arena> Parser<'source, 'arena> {
 
     // TODO: Proper error handling
     // TODO: Function calls
-    fn expr(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
         self.disjunction()
     }
 
-    fn disjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn disjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.conjunction()?;
-        while self.accept(tok![||])? {
+        while self.accept(tok![||])?.is_some() {
             let right = self.conjunction()?;
-            left = Expr::LogicalOr(self.alloc(left), self.alloc(right));
+            left = ExprKind::LogicalOr(self.alloc(left), self.alloc(right))
+                .with_span(left.span().merge(right.span()));
         }
         Ok(left)
     }
 
     // conjunction = conjunction 'and' inversion
     //             | inversion
-    fn conjunction(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn conjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.comparison()?;
-        while self.accept(tok![&&])? {
+        while self.accept(tok![&&])?.is_some() {
             let right = self.comparison()?;
-            left = Expr::LogicalAnd(self.alloc(left), self.alloc(right));
+            left = ExprKind::LogicalAnd(self.alloc(left), self.alloc(right))
+                .with_span(left.span().merge(right.span()));
         }
         Ok(left)
     }
 
-    fn comparison(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn comparison(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let left = self.inversion()?;
         let tokens: &[(_, fn(_, _) -> _)] = &[
-            (tok![==], Expr::Eq),
-            (tok![!=], Expr::Neq),
-            (tok![>=], Expr::Gte),
-            (tok![<=], Expr::Lte),
-            (tok![>], Expr::Gt),
-            (tok![<], Expr::Lt),
+            (tok![==], ExprKind::Eq),
+            (tok![!=], ExprKind::Neq),
+            (tok![>=], ExprKind::Gte),
+            (tok![<=], ExprKind::Lte),
+            (tok![>], ExprKind::Gt),
+            (tok![<], ExprKind::Lt),
         ];
         for (t, f) in tokens {
-            if self.accept(*t)? {
+            if self.accept(*t)?.is_some() {
                 let right = self.inversion()?;
-                return Ok(f(self.alloc(left), self.alloc(right)));
+                return Ok(f(self.alloc(left), self.alloc(right)).with_span(left.span().merge(right.span())));
             }
         }
         Ok(left)
@@ -194,10 +199,10 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // inversion = '!' inversion
     //           | sum
     // TODO: this should go to comparison
-    fn inversion(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        if self.accept(tok![!])? {
+    fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
+        if let Some(span) = self.accept(tok![!])? {
             let arg = self.inversion()?;
-            Ok(Expr::Not(self.alloc(arg)))
+            Ok(ExprKind::Not(self.alloc(arg)).with_span(span.merge(&arg.span())))
         } else {
             self.sum()
         }
@@ -206,15 +211,15 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // sum = sum '+' term
     //     | sum '-' term
     //     | term
-    fn sum(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn sum(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.term()?;
         loop {
-            if self.accept(tok![+])? {
+            if self.accept(tok![+])?.is_some() {
                 let right = self.term()?;
-                left = Expr::Add(self.alloc(left), self.alloc(right));
-            } else if self.accept(tok![-])? {
+                left = ExprKind::Add(self.alloc(left), self.alloc(right)).with_span(left.span().merge(right.span()));
+            } else if self.accept(tok![-])?.is_some() {
                 let right = self.term()?;
-                left = Expr::Sub(self.alloc(left), self.alloc(right));
+                left = ExprKind::Sub(self.alloc(left), self.alloc(right)).with_span(left.span().merge(right.span()));
             } else {
                 return Ok(left);
             }
@@ -224,15 +229,17 @@ impl<'source, 'arena> Parser<'source, 'arena> {
     // term = term '*' factor
     //      | term '/' factor
     //      | factor
-    fn term(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn term(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.factor()?;
         loop {
-            if self.accept(tok![*])? {
+            if self.accept(tok![*])?.is_some() {
                 let right = self.factor()?;
-                left = Expr::Mul(self.alloc(left), self.alloc(right));
-            } else if self.accept(tok![/])? {
+                left = ExprKind::Mul(self.alloc(left), self.alloc(right))
+                    .with_span(left.span().merge(right.span()));
+            } else if self.accept(tok![/])?.is_some() {
                 let right = self.factor()?;
-                left = Expr::Div(self.alloc(left), self.alloc(right));
+                left = ExprKind::Div(self.alloc(left), self.alloc(right))
+                    .with_span(left.span().merge(right.span()));
             } else {
                 return Ok(left);
             }
@@ -241,36 +248,38 @@ impl<'source, 'arena> Parser<'source, 'arena> {
 
     // factor = '-' atom
     //        | atom
-    fn factor(&mut self) -> ParseResult<Expr<'source, 'arena>> {
-        if self.accept(tok![-])? {
+    fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
+        if let Some(span) = self.accept(tok![-])? {
             let arg = self.atom()?;
-            Ok(Expr::Neg(self.alloc(arg)))
+            Ok(ExprKind::Neg(self.alloc(arg)).with_span(span.merge(arg.span())))
         } else {
             self.atom()
         }
     }
 
-    fn atom(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn atom(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if self.accept_peek(Token::RoundLeft)? {
             return self.paren();
         } else if self.accept_peek(Token::CurlyLeft)? {
             let expr = self.block()?;
-            return Ok(Expr::Block(self.alloc(expr)));
+            let span = expr.span;
+            return Ok(ExprKind::Block(self.alloc(expr)).with_span(span));
         }
 
-        let expr = match self.next()? {
-            Token::Ident(s) => Expr::Ident(Ident { string: s }),
-            Token::False => Expr::Lit(Lit::Bool(false)),
-            Token::True => Expr::Lit(Lit::Bool(true)),
-            Token::String(s) => Expr::Lit(Lit::String(s)),
-            Token::Int(i) => Expr::Lit(Lit::Int(i)),
+        let (token, span) = self.next()?;
+        let expr = match token {
+            Token::Ident(s) => ExprKind::Ident(Ident { string: s }).with_span(span),
+            Token::False => ExprKind::Lit(Lit::Bool(false)).with_span(span),
+            Token::True => ExprKind::Lit(Lit::Bool(true)).with_span(span),
+            Token::String(s) => ExprKind::Lit(Lit::String(s)).with_span(span),
+            Token::Int(i) => ExprKind::Lit(Lit::Int(i)).with_span(span),
             _ => return Err(ParseError::Expected),
         };
 
         Ok(expr)
     }
 
-    fn paren(&mut self) -> ParseResult<Expr<'source, 'arena>> {
+    fn paren(&mut self) -> ParseResult<Expr<'s, 'a>> {
         self.eat(Token::RoundLeft)?;
 
         if self.accept(Token::RoundRight)? {
@@ -302,16 +311,17 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         }
     }
 
-    fn block(&mut self) -> ParseResult<Block<'source, 'arena>> {
-        self.eat(Token::CurlyLeft)?;
+    fn block(&mut self) -> ParseResult<Block<'s, 'a>> {
+        let open_span = self.eat(Token::CurlyLeft)?;
 
         let mut vec = Vec::new_in(self.arena);
 
         loop {
-            if self.accept(Token::CurlyRight)? {
+            if let Some(close_span) = self.accept(Token::CurlyRight)? {
                 return Ok(Block {
                     stmts: vec.into_bump_slice(),
                     last: None,
+                    span: open_span.merge(&close_span)
                 });
             }
             if self.accept(tok![let])? {
@@ -325,17 +335,18 @@ impl<'source, 'arena> Parser<'source, 'arena> {
                 if self.accept(tok![;])? {
                     vec.push(Statement::Expr(self.alloc(expr)));
                 } else {
-                    self.eat(Token::CurlyRight)?;
+                    let close_span = self.eat(Token::CurlyRight)?;
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
+                        span: open_span.merge(&close_span)
                     });
                 }
             }
         }
     }
 
-    fn ident(&mut self) -> ParseResult<Ident<'source>> {
+    fn ident(&mut self) -> ParseResult<Ident<'s>> {
         match self.next()? {
             Token::Ident(s) => Ok(Ident { string: s }),
             _ => Err(ParseError::Expected),
@@ -346,7 +357,7 @@ impl<'source, 'arena> Parser<'source, 'arena> {
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use crate::ast::{Block, Expr, Ident, Lit, Statement};
+    use crate::parser::ast::{Block, Expr, Ident, Lit, Statement};
     use bumpalo::Bump;
 
     macro_rules! assert_matches {
