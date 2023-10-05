@@ -164,7 +164,15 @@ impl<'source, 'arena> Parser<'source, 'arena> {
         let expr = self.expr()?;
         let then_block = self.block()?;
         if self.accept_optional(tok![else])? {
-            let else_block = self.block()?;
+            let else_block = if self.peek_is(tok![if])? {
+                let else_if = self.if_else()?;
+                Block {
+                    stmts: &[],
+                    last: Some(else_if),
+                }
+            } else {
+                self.block()?
+            };
             Ok(Expr::If(
                 self.alloc(expr),
                 self.alloc(then_block),
@@ -572,6 +580,30 @@ mod test {
                 None,
             )
         );
+        assert_expr_matches!(
+            "if 1 { 2 } else if 3 { 4 } else { 5 }",
+            Expr::If(
+                int!(1),
+                Block {
+                    stmts: &[],
+                    last: Some(int!(2))
+                },
+                Some(Block {
+                    stmts: &[],
+                    last: Some(Expr::If(
+                        int!(3),
+                        Block {
+                            stmts: &[],
+                            last: Some(int!(4))
+                        },
+                        Some(Block {
+                            stmts: &[],
+                            last: Some(int!(5))
+                        })
+                    ))
+                }),
+            )
+        );
     }
 
     #[test]
@@ -688,6 +720,33 @@ mod test {
                         last: Some(int!(4)),
                     }),
                 )),
+            })
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } else if 3 { 4 } else { 5 } 6 }",
+            Expr::Block(Block {
+                stmts: &[Statement::Expr(Expr::If(
+                    int!(1),
+                    Block {
+                        stmts: &[],
+                        last: Some(int!(2))
+                    },
+                    Some(Block {
+                        stmts: &[],
+                        last: Some(Expr::If(
+                            int!(3),
+                            Block {
+                                stmts: &[],
+                                last: Some(int!(4))
+                            },
+                            Some(Block {
+                                stmts: &[],
+                                last: Some(int!(5))
+                            })
+                        ))
+                    }),
+                ))],
+                last: Some(int!(6)),
             })
         );
     }
