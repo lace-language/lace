@@ -71,10 +71,12 @@ impl Span {
         }
     }
 
+    #[allow(dead_code)]
     pub fn offset(&self) -> usize {
         self.offset as usize
     }
 
+    #[allow(dead_code)]
     pub fn length(&self) -> usize {
         self.length as usize
     }
