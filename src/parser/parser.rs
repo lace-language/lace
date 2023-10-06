@@ -60,6 +60,12 @@ macro_rules! tok {
     (let) => {
         Token::Let
     };
+    (if) => {
+        Token::If
+    };
+    (else) => {
+        Token::Else
+    };
     (false) => {
         Token::False
     };
@@ -123,16 +129,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
     }
 
-    fn accept(&mut self, token: Token) -> ParseResult<Option<Span>> {
-        let res = self.accept_peek(token)?;
-        if res {
-            Ok(Some(self.next()?.1))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn accept_peek(&mut self, token: Token) -> ParseResult<bool> {
+    fn peek_is(&mut self, token: Token) -> ParseResult<bool> {
         let Some(lexed_token) = self.peek()? else {
             return Ok(false);
         };
@@ -140,7 +137,15 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(token == lexed_token)
     }
 
-    fn eat(&mut self, token: Token) -> ParseResult<Span> {
+    fn accept_optional(&mut self, token: Token) -> ParseResult<Option<Span>> {
+        if self.peek_is(token)? {
+            Ok(Some(self.next()?.1))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn accept_required(&mut self, token: Token) -> ParseResult<Span> {
         let (next, span) = self.next()?;
         if next == token {
             Ok(span)
@@ -157,7 +162,7 @@ impl<'s, 'a> Parser<'s, 'a> {
 
     fn disjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.conjunction()?;
-        while self.accept(tok![||])?.is_some() {
+        while self.accept_optional(tok![||])?.is_some() {
             let right = self.conjunction()?;
             let span = left.span().merge(right.span());
             left = ExprKind::LogicalOr(self.alloc(left), self.alloc(right)).with_span(span)
@@ -169,7 +174,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     //             | inversion
     fn conjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.comparison()?;
-        while self.accept(tok![&&])?.is_some() {
+        while self.accept_optional(tok![&&])?.is_some() {
             let right = self.comparison()?;
             let span = left.span().merge(right.span());
             left = ExprKind::LogicalAnd(self.alloc(left), self.alloc(right)).with_span(span);
@@ -188,7 +193,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             (tok![<], ExprKind::Lt),
         ];
         for (t, f) in tokens {
-            if self.accept(*t)?.is_some() {
+            if self.accept_optional(*t)?.is_some() {
                 let right = self.inversion()?;
                 let span = left.span().merge(right.span());
                 return Ok(f(self.alloc(left), self.alloc(right)).with_span(span));
@@ -201,7 +206,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     //           | sum
     // TODO: this should go to comparison
     fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        if let Some(span) = self.accept(tok![!])? {
+        if let Some(span) = self.accept_optional(tok![!])? {
             let arg = self.inversion()?;
             let span = span.merge(arg.span());
             Ok(ExprKind::Not(self.alloc(arg)).with_span(span))
@@ -216,11 +221,11 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn sum(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.term()?;
         loop {
-            if self.accept(tok![+])?.is_some() {
+            if self.accept_optional(tok![+])?.is_some() {
                 let right = self.term()?;
                 let span = left.span().merge(right.span());
                 left = ExprKind::Add(self.alloc(left), self.alloc(right)).with_span(span);
-            } else if self.accept(tok![-])?.is_some() {
+            } else if self.accept_optional(tok![-])?.is_some() {
                 let right = self.term()?;
                 let span = left.span().merge(right.span());
                 left = ExprKind::Sub(self.alloc(left), self.alloc(right)).with_span(span);
@@ -236,11 +241,11 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn term(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.factor()?;
         loop {
-            if self.accept(tok![*])?.is_some() {
+            if self.accept_optional(tok![*])?.is_some() {
                 let right = self.factor()?;
                 let span = left.span().merge(right.span());
                 left = ExprKind::Mul(self.alloc(left), self.alloc(right)).with_span(span);
-            } else if self.accept(tok![/])?.is_some() {
+            } else if self.accept_optional(tok![/])?.is_some() {
                 let right = self.factor()?;
                 let span = left.span().merge(right.span());
                 left = ExprKind::Div(self.alloc(left), self.alloc(right)).with_span(span);
@@ -253,7 +258,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     // factor = '-' atom
     //        | atom
     fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        if let Some(span) = self.accept(tok![-])? {
+        if let Some(span) = self.accept_optional(tok![-])? {
             let arg = self.atom()?;
             let span = span.merge(arg.span());
             Ok(ExprKind::Neg(self.alloc(arg)).with_span(span))
@@ -263,12 +268,16 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn atom(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        if self.accept_peek(Token::RoundLeft)? {
+        if self.peek_is(Token::RoundLeft)? {
             return self.paren();
-        } else if self.accept_peek(Token::CurlyLeft)? {
+        } else if self.peek_is(Token::CurlyLeft)? {
             let expr = self.block()?;
             let span = expr.span;
             return Ok(ExprKind::Block(self.alloc(expr)).with_span(span));
+        }
+
+        if self.peek_is(tok![if])? {
+            return self.if_else();
         }
 
         let (token, span) = self.next()?;
@@ -285,31 +294,31 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn paren(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let start_span = self.eat(Token::RoundLeft)?;
+        let start_span = self.accept_required(Token::RoundLeft)?;
 
-        if let Some(end_span) = self.accept(Token::RoundRight)? {
+        if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
             return Ok(ExprKind::Tuple(&[]).with_span(start_span.merge(&end_span)));
         }
 
         let expr = self.expr()?;
 
         // TODO: Add parentheses to AST
-        if self.accept(Token::RoundRight)?.is_some() {
+        if self.accept_optional(Token::RoundRight)?.is_some() {
             return Ok(expr);
         }
 
         let mut vec = Vec::new_in(self.arena);
         vec.push(expr);
 
-        while self.accept(tok![,])?.is_some() {
-            if let Some(end_span) = self.accept(Token::RoundRight)? {
+        while self.accept_optional(tok![,])?.is_some() {
+            if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
                 return Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)));
             }
             vec.push(self.expr()?);
         }
 
-        if let Some(end_span) = self.accept(Token::RoundRight)? {
+        if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
             let slice = vec.into_bump_slice();
             Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)))
         } else {
@@ -318,12 +327,12 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn block(&mut self) -> ParseResult<Block<'s, 'a>> {
-        let open_span = self.eat(Token::CurlyLeft)?;
+        let open_span = self.accept_required(Token::CurlyLeft)?;
 
         let mut vec = Vec::new_in(self.arena);
 
         loop {
-            if let Some(close_span) = self.accept(Token::CurlyRight)? {
+            if let Some(close_span) = self.accept_optional(Token::CurlyRight)? {
                 return Ok(Block {
                     stmts: vec.into_bump_slice(),
                     last: None,
@@ -331,18 +340,31 @@ impl<'s, 'a> Parser<'s, 'a> {
                 });
             }
             // TODO: Spans for statements
-            if self.accept(tok![let])?.is_some() {
+            if self.accept_optional(tok![let])?.is_some() {
                 let ident = self.ident()?;
-                self.eat(tok![=])?;
+                self.accept_required(tok![=])?;
                 let expr = self.expr()?;
-                self.eat(tok![;])?;
+                self.accept_required(tok![;])?;
                 vec.push(Statement::Let(ident, self.alloc(expr)));
+            } else if self.peek_is(tok![if])? {
+                let expr = self.if_else()?;
+
+                if let Some(close_span) = self.accept_optional(Token::CurlyRight)? {
+                    return Ok(Block {
+                        stmts: vec.into_bump_slice(),
+                        last: Some(expr),
+                        span: open_span.merge(&close_span),
+                    });
+                }
+
+                self.accept_optional(tok![;])?;
+                vec.push(Statement::Expr(self.alloc(expr)));
             } else {
                 let expr = self.expr()?;
-                if self.accept(tok![;])?.is_some() {
+                if self.accept_optional(tok![;])?.is_some() {
                     vec.push(Statement::Expr(self.alloc(expr)));
                 } else {
-                    let close_span = self.eat(Token::CurlyRight)?;
+                    let close_span = self.accept_required(Token::CurlyRight)?;
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
@@ -350,6 +372,38 @@ impl<'s, 'a> Parser<'s, 'a> {
                     });
                 }
             }
+        }
+    }
+
+    fn if_else(&mut self) -> ParseResult<Expr<'s, 'a>> {
+        let start_span = self.accept_required(tok![if])?;
+
+        let expr = self.expr()?;
+        let then_block = self.block()?;
+
+        if self.accept_optional(tok![else])?.is_some() {
+            let else_block = if self.peek_is(tok![if])? {
+                let else_if = self.if_else()?;
+                let span = else_if.span;
+                Block {
+                    stmts: &[],
+                    last: Some(else_if),
+                    span,
+                }
+            } else {
+                self.block()?
+            };
+
+            let span = start_span.merge(&else_block.span);
+            Ok(ExprKind::If(
+                self.alloc(expr),
+                self.alloc(then_block),
+                Some(self.alloc(else_block)),
+            )
+            .with_span(span))
+        } else {
+            let span = start_span.merge(&then_block.span);
+            Ok(ExprKind::If(self.alloc(expr), self.alloc(then_block), None).with_span(span))
         }
     }
 
@@ -526,18 +580,27 @@ mod test {
     }
 
     macro_rules! block {
-        // () => {
-        //     spanned!(ExprKind::Block(Block { stmts: &[], last: None, .. }))
-        // };
         ($($stmts:pat),*) => {
-            spanned!(ExprKind::Block(Block { stmts: &[$($stmts),*], last: None, .. }))
+            Block { stmts: &[$($stmts),*], last: None, .. }
         };
         ($($stmts:pat),* => $exp:pat) => {
-            spanned!(ExprKind::Block(Block { stmts: &[$($stmts),*], last: Some($exp), .. }))
+            Block { stmts: &[$($stmts),*], last: Some($exp), .. }
         };
+    }
 
+    macro_rules! block_expr {
+        ($($tok:tt)*) =>  {
+            spanned!(ExprKind::Block(block!{$($tok)*}))
+        }
+    }
 
-
+    macro_rules! if_ {
+        ($cond:pat, $then:pat) => {
+            spanned!(ExprKind::If($cond, $then, None))
+        };
+        ($cond:pat, $then:pat, $else:pat) => {
+            spanned!(ExprKind::If($cond, $then, Some($else)))
+        };
     }
 
     #[test]
@@ -635,22 +698,61 @@ mod test {
 
     #[test]
     fn blocks() {
-        assert_expr_matches!("{}", block! {});
-        assert_expr_matches!("{ 10 }", block! { => int!(10) });
-        assert_expr_matches!("{ 10; }", block! { exp!(int!(10)) });
+        assert_expr_matches!("{}", block_expr! {});
+        assert_expr_matches!("{ 10 }", block_expr! { => int!(10) });
+        assert_expr_matches!("{ 10; }", block_expr! { exp!(int!(10)) });
         assert_expr_matches!(
             "{ 10; 20 }",
-            block! {
+            block_expr! {
                 exp!(int!(10))
                 => int!(20)
             }
         );
         assert_expr_matches!(
             "{ let x = 10; x }",
-            block! {
+            block_expr! {
                 let_!(x, int!(10))
                 => ident!(x)
             }
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } 3 }",
+            block_expr!(exp!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 }; 3 }",
+            block_expr!(exp!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } else { 3 } 4 }",
+            block_expr!(
+                exp!(if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))))
+                => int!(4)
+            )
+        );
+    }
+
+    #[test]
+    fn if_else() {
+        assert_expr_matches!(
+            "if 1 { 2 } else { 3 }",
+            if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))),
+        );
+        assert_expr_matches!(
+            "if 1 { 2 } else { 3 } + 4",
+            add!(
+                if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))),
+                int!(4)
+            )
+        );
+        assert_expr_matches!("if 1 { 2 }", if_!(int!(1), block!(=> int!(2))),);
+        assert_expr_matches!(
+            "if 1 { 2 } else if 3 { 4 } else { 5 }",
+            if_!(
+                int!(1),
+                block!(=> int!(2)),
+                block!(=> if_!(int!(3), block!(=> int!(4)), block!(=> int!(5))))
+            ),
         );
     }
 
