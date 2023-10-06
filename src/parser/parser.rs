@@ -60,6 +60,12 @@ macro_rules! tok {
     (let) => {
         Token::Let
     };
+    (if) => {
+        Token::If
+    };
+    (else) => {
+        Token::Else
+    };
     (false) => {
         Token::False
     };
@@ -270,6 +276,10 @@ impl<'s, 'a> Parser<'s, 'a> {
             return Ok(ExprKind::Block(self.alloc(expr)).with_span(span));
         }
 
+        if self.peek_is(tok![if])? {
+            return self.if_else();
+        }
+
         let (token, span) = self.next()?;
         let expr = match token {
             Token::Ident(s) => ExprKind::Ident(Ident { string: s }).with_span(span),
@@ -336,6 +346,19 @@ impl<'s, 'a> Parser<'s, 'a> {
                 let expr = self.expr()?;
                 self.accept_required(tok![;])?;
                 vec.push(Statement::Let(ident, self.alloc(expr)));
+            } else if self.peek_is(tok![if])? {
+                let expr = self.if_else()?;
+
+                if let Some(close_span) = self.accept_optional(Token::CurlyRight)? {
+                    return Ok(Block {
+                        stmts: vec.into_bump_slice(),
+                        last: Some(expr),
+                        span: open_span.merge(&close_span),
+                    });
+                }
+
+                self.accept_optional(tok![;])?;
+                vec.push(Statement::Expr(self.alloc(expr)));
             } else {
                 let expr = self.expr()?;
                 if self.accept_optional(tok![;])?.is_some() {
@@ -349,6 +372,38 @@ impl<'s, 'a> Parser<'s, 'a> {
                     });
                 }
             }
+        }
+    }
+
+    fn if_else(&mut self) -> ParseResult<Expr<'s, 'a>> {
+        let start_span = self.accept_required(tok![if])?;
+
+        let expr = self.expr()?;
+        let then_block = self.block()?;
+
+        if self.accept_optional(tok![else])?.is_some() {
+            let else_block = if self.peek_is(tok![if])? {
+                let else_if = self.if_else()?;
+                let span = else_if.span;
+                Block {
+                    stmts: &[],
+                    last: Some(else_if),
+                    span,
+                }
+            } else {
+                self.block()?
+            };
+
+            let span = start_span.merge(&else_block.span);
+            Ok(ExprKind::If(
+                self.alloc(expr),
+                self.alloc(then_block),
+                Some(self.alloc(else_block)),
+            )
+            .with_span(span))
+        } else {
+            let span = start_span.merge(&then_block.span);
+            Ok(ExprKind::If(self.alloc(expr), self.alloc(then_block), None).with_span(span))
         }
     }
 
@@ -525,18 +580,27 @@ mod test {
     }
 
     macro_rules! block {
-        // () => {
-        //     spanned!(ExprKind::Block(Block { stmts: &[], last: None, .. }))
-        // };
         ($($stmts:pat),*) => {
-            spanned!(ExprKind::Block(Block { stmts: &[$($stmts),*], last: None, .. }))
+            Block { stmts: &[$($stmts),*], last: None, .. }
         };
         ($($stmts:pat),* => $exp:pat) => {
-            spanned!(ExprKind::Block(Block { stmts: &[$($stmts),*], last: Some($exp), .. }))
+            Block { stmts: &[$($stmts),*], last: Some($exp), .. }
         };
+    }
 
+    macro_rules! block_expr {
+        ($($tok:tt)*) =>  {
+            spanned!(ExprKind::Block(block!{$($tok)*}))
+        }
+    }
 
-
+    macro_rules! if_ {
+        ($cond:pat, $then:pat) => {
+            spanned!(ExprKind::If($cond, $then, None))
+        };
+        ($cond:pat, $then:pat, $else:pat) => {
+            spanned!(ExprKind::If($cond, $then, Some($else)))
+        };
     }
 
     #[test]
@@ -634,22 +698,61 @@ mod test {
 
     #[test]
     fn blocks() {
-        assert_expr_matches!("{}", block! {});
-        assert_expr_matches!("{ 10 }", block! { => int!(10) });
-        assert_expr_matches!("{ 10; }", block! { exp!(int!(10)) });
+        assert_expr_matches!("{}", block_expr! {});
+        assert_expr_matches!("{ 10 }", block_expr! { => int!(10) });
+        assert_expr_matches!("{ 10; }", block_expr! { exp!(int!(10)) });
         assert_expr_matches!(
             "{ 10; 20 }",
-            block! {
+            block_expr! {
                 exp!(int!(10))
                 => int!(20)
             }
         );
         assert_expr_matches!(
             "{ let x = 10; x }",
-            block! {
+            block_expr! {
                 let_!(x, int!(10))
                 => ident!(x)
             }
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } 3 }",
+            block_expr!(exp!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 }; 3 }",
+            block_expr!(exp!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
+        );
+        assert_expr_matches!(
+            "{ if 1 { 2 } else { 3 } 4 }",
+            block_expr!(
+                exp!(if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))))
+                => int!(4)
+            )
+        );
+    }
+
+    #[test]
+    fn if_else() {
+        assert_expr_matches!(
+            "if 1 { 2 } else { 3 }",
+            if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))),
+        );
+        assert_expr_matches!(
+            "if 1 { 2 } else { 3 } + 4",
+            add!(
+                if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))),
+                int!(4)
+            )
+        );
+        assert_expr_matches!("if 1 { 2 }", if_!(int!(1), block!(=> int!(2))),);
+        assert_expr_matches!(
+            "if 1 { 2 } else if 3 { 4 } else { 5 }",
+            if_!(
+                int!(1),
+                block!(=> int!(2)),
+                block!(=> if_!(int!(3), block!(=> int!(4)), block!(=> int!(5))))
+            ),
         );
     }
 
