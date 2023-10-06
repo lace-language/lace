@@ -6,7 +6,6 @@ pub type Expr<'s, 'a> = Spanned<ExprKind<'s, 'a>>;
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprKind<'s, 'a> {
     Lit(Lit<'s>),
-    Fn,
     Block(&'a Block<'s, 'a>),
     Ident(Ident<'s>),
     Neg(&'a Spanned<Self>),
