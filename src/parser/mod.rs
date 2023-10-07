@@ -34,7 +34,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
     }
 
-    pub fn parse(&mut self) -> ParseResult<File<'s, 'a>> {
+    pub fn parse(mut self) -> ParseResult<File<'s, 'a>> {
         self.file()
     }
 
