@@ -200,10 +200,10 @@ macro_rules! call {
 
 macro_rules! block {
     ($($stmts:pat),*) => {
-        Block { stmts: &[$($stmts),*], last: None, .. }
+        spanned!(Block { stmts: &[$($stmts),*], last: None, .. })
     };
     ($($stmts:pat),* => $exp:pat) => {
-        Block { stmts: &[$($stmts),*], last: Some($exp), .. }
+        spanned!(Block { stmts: &[$($stmts),*], last: Some($exp), .. })
     };
 }
 

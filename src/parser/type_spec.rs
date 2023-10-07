@@ -6,7 +6,7 @@ use crate::parser::Parser;
 impl<'s, 'a> Parser<'s, 'a> {
     pub(super) fn type_spec(&mut self) -> ParseResult<Spanned<TypeSpec<'s>>> {
         let name = self.ident()?;
-        let span = *name.span();
+        let span = name.span();
 
         Ok(TypeSpec::Name(name).with_span(span))
     }

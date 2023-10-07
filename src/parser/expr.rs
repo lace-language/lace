@@ -16,7 +16,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         let mut left = self.conjunction()?;
         while self.accept_optional(tok![||])?.is_some() {
             let right = self.conjunction()?;
-            let span = left.span().merge(right.span());
+            let span = self.spans.merge(&left, &right);
             left = ExprKind::LogicalOr(self.alloc(left), self.alloc(right)).with_span(span)
         }
         Ok(left)
@@ -28,7 +28,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         let mut left = self.comparison()?;
         while self.accept_optional(tok![&&])?.is_some() {
             let right = self.comparison()?;
-            let span = left.span().merge(right.span());
+            let span = self.spans.merge(&left, &right);
             left = ExprKind::LogicalAnd(self.alloc(left), self.alloc(right)).with_span(span);
         }
         Ok(left)
@@ -47,7 +47,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         for (t, f) in tokens {
             if self.accept_optional(*t)?.is_some() {
                 let right = self.inversion()?;
-                let span = left.span().merge(right.span());
+                let span = self.spans.merge(&left, &right);
                 return Ok(f(self.alloc(left), self.alloc(right)).with_span(span));
             }
         }
@@ -60,7 +60,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![!])? {
             let arg = self.inversion()?;
-            let span = span.merge(arg.span());
+            let span = self.spans.store_merged(span, &arg);
             Ok(ExprKind::Not(self.alloc(arg)).with_span(span))
         } else {
             self.sum()
@@ -75,11 +75,11 @@ impl<'s, 'a> Parser<'s, 'a> {
         loop {
             if self.accept_optional(tok![+])?.is_some() {
                 let right = self.term()?;
-                let span = left.span().merge(right.span());
+                let span = self.spans.merge(&left, &right);
                 left = ExprKind::Add(self.alloc(left), self.alloc(right)).with_span(span);
             } else if self.accept_optional(tok![-])?.is_some() {
                 let right = self.term()?;
-                let span = left.span().merge(right.span());
+                let span = self.spans.merge(&left, &right);
                 left = ExprKind::Sub(self.alloc(left), self.alloc(right)).with_span(span);
             } else {
                 return Ok(left);
@@ -95,11 +95,11 @@ impl<'s, 'a> Parser<'s, 'a> {
         loop {
             if self.accept_optional(tok![*])?.is_some() {
                 let right = self.factor()?;
-                let span = left.span().merge(right.span());
+                let span = self.spans.merge(&left, &right);
                 left = ExprKind::Mul(self.alloc(left), self.alloc(right)).with_span(span);
             } else if self.accept_optional(tok![/])?.is_some() {
                 let right = self.factor()?;
-                let span = left.span().merge(right.span());
+                let span = self.spans.merge(&left, &right);
                 left = ExprKind::Div(self.alloc(left), self.alloc(right)).with_span(span);
             } else {
                 return Ok(left);
@@ -112,7 +112,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![-])? {
             let arg = self.call_expr()?;
-            let span = span.merge(arg.span());
+            let span = self.spans.store_merged(span, &arg);
             Ok(ExprKind::Neg(self.alloc(arg)).with_span(span))
         } else {
             self.call_expr()
@@ -126,7 +126,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
             // yes, this is really necessary.
             let a: &[_] = &[];
-            return Ok(a.with_span(start_span.merge(&end_span)));
+            return Ok(a.with_span(self.spans.store(start_span.merge(&end_span))));
         }
 
         let mut parameters = Vec::new_in(self.arena);
@@ -137,7 +137,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
                 return Ok(parameters
                     .into_bump_slice()
-                    .with_span(start_span.merge(&end_span)));
+                    .with_span(self.spans.store(start_span.merge(&end_span))));
             }
 
             parameters.push(self.expr()?);
@@ -147,7 +147,7 @@ impl<'s, 'a> Parser<'s, 'a> {
 
         Ok(parameters
             .into_bump_slice()
-            .with_span(start_span.merge(&end_span)))
+            .with_span(self.spans.store(start_span.merge(&end_span))))
     }
 
     fn call_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
@@ -156,7 +156,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         if self.peek_is(Token::RoundLeft)? {
             let args = self.call_args()?;
 
-            let span = atom.span().merge(args.span());
+            let span = self.spans.merge(&atom, &args);
             Ok(ExprKind::Call(self.alloc(atom), args).with_span(span))
         } else {
             Ok(atom)
@@ -177,6 +177,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
 
         let (token, span) = self.next()?;
+        let span = self.spans.store(span);
         let expr = match token {
             Token::Ident(s) => ExprKind::Ident(Ident { string: s }).with_span(span),
             Token::False => ExprKind::Lit(Lit::Bool(false)).with_span(span),
@@ -194,21 +195,25 @@ impl<'s, 'a> Parser<'s, 'a> {
             return Err(ParseError::Expected);
         };
 
-        Ok(Ident { string: name }.with_span(name_span))
+        Ok(Ident { string: name }.with_span(self.spans.store(name_span)))
     }
 
     fn paren(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let start_span = self.accept_required(Token::RoundLeft)?;
 
         if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
-            return Ok(ExprKind::Tuple(&[]).with_span(start_span.merge(&end_span)));
+            return Ok(
+                ExprKind::Tuple(&[]).with_span(self.spans.store(start_span.merge(&end_span)))
+            );
         }
 
         let expr = self.expr()?;
 
         if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
             let expr = self.alloc(expr);
-            return Ok(ExprKind::Paren(expr).with_span(start_span.merge(&end_span)));
+            return Ok(
+                ExprKind::Paren(expr).with_span(self.spans.store(start_span.merge(&end_span)))
+            );
         }
 
         let mut vec = Vec::new_in(self.arena);
@@ -217,7 +222,9 @@ impl<'s, 'a> Parser<'s, 'a> {
         while self.accept_optional(tok![,])?.is_some() {
             if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
-                return Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)));
+                return Ok(
+                    ExprKind::Tuple(slice).with_span(self.spans.store(start_span.merge(&end_span)))
+                );
             }
             vec.push(self.expr()?);
         }
@@ -225,6 +232,6 @@ impl<'s, 'a> Parser<'s, 'a> {
         let end_span = self.accept_required(Token::RoundRight)?;
         let slice = vec.into_bump_slice();
 
-        Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)))
+        Ok(ExprKind::Tuple(slice).with_span(self.spans.store(start_span.merge(&end_span))))
     }
 }
