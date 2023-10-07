@@ -1,11 +1,14 @@
 use std::iter::Peekable;
 
 use crate::lexer::{Lexer, Token};
-use crate::parser::ast::{Block, Expr, ExprKind, Ident, Lit, Statement};
-use crate::parser::span::{Span, WithSpan};
+use crate::parser::ast::{Block, Expr, ExprKind, File, Function, Ident, Item, Lit, Parameter, Statement, TypeSpec};
+use crate::parser::span::{Span, Spanned, WithSpan};
 use bumpalo::{collections::Vec, Bump};
 
 macro_rules! tok {
+    (->) => {
+        Token::RightArrow
+    };
     (&&) => {
         Token::AmpAmp
     };
@@ -113,6 +116,10 @@ impl<'s, 'a> Parser<'s, 'a> {
         self.arena.alloc(x)
     }
 
+    fn has_next(&mut self) -> ParseResult<bool> {
+        Ok(self.peek()?.is_some())
+    }
+
     fn next(&mut self) -> ParseResult<(Token<'s>, Span)> {
         match self.lexer.next() {
             Some((Ok(t), s)) => Ok((t, s.into())),
@@ -149,6 +156,26 @@ impl<'s, 'a> Parser<'s, 'a> {
         let (next, span) = self.next()?;
         if next == token {
             Ok(span)
+        } else {
+            Err(ParseError::Expected)
+        }
+    }
+
+    fn file(&mut self) -> ParseResult<File<'s, 'a>> {
+        let mut items = Vec::new_in(self.arena);
+
+        while self.has_next()? {
+            items.push(self.item()?);
+        }
+
+        Ok(File {
+            items: items.into_bump_slice(),
+        })
+    }
+
+    fn item(&mut self) -> ParseResult<Item<'s, 'a>> {
+        if self.peek_is(tok![fn])? {
+            Ok(Item::Function(self.parse_function()?))
         } else {
             Err(ParseError::Expected)
         }
@@ -318,12 +345,10 @@ impl<'s, 'a> Parser<'s, 'a> {
             vec.push(self.expr()?);
         }
 
-        if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
-            let slice = vec.into_bump_slice();
-            Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)))
-        } else {
-            Err(ParseError::Expected)
-        }
+        let end_span = self.accept_required(Token::RoundRight)?;
+        let slice = vec.into_bump_slice();
+
+        Ok(ExprKind::Tuple(slice).with_span(start_span.merge(&end_span)))
     }
 
     fn block(&mut self) -> ParseResult<Block<'s, 'a>> {
@@ -400,32 +425,99 @@ impl<'s, 'a> Parser<'s, 'a> {
                 self.alloc(then_block),
                 Some(self.alloc(else_block)),
             )
-            .with_span(span))
+                .with_span(span))
         } else {
             let span = start_span.merge(&then_block.span);
             Ok(ExprKind::If(self.alloc(expr), self.alloc(then_block), None).with_span(span))
         }
     }
 
-    fn ident(&mut self) -> ParseResult<Ident<'s>> {
-        match self.next()?.0 {
-            Token::Ident(s) => Ok(Ident { string: s }),
-            _ => Err(ParseError::Expected),
+    fn ident(&mut self) -> ParseResult<Spanned<Ident<'s>>> {
+        let (Token::Ident(name), name_span) = self.next()? else {
+            return Err(ParseError::Expected);
+        };
+
+        Ok(Ident { string: name }.with_span(name_span))
+    }
+
+
+    fn type_spec(&mut self) -> ParseResult<Spanned<TypeSpec<'s>>> {
+        let name = self.ident()?;
+        let span = *name.span();
+
+        Ok(TypeSpec::Name(name).with_span(span))
+    }
+
+    fn parse_parameter(&mut self) -> ParseResult<Parameter<'s>> {
+        let name = self.ident()?;
+        self.accept_required(tok![:])?;
+        let type_spec = self.type_spec()?;
+
+        Ok(Parameter {
+            name,
+            type_spec,
+        })
+    }
+
+    fn parse_parameters(&mut self) -> ParseResult<&'a [Parameter<'s>]> {
+        self.accept_required(Token::RoundLeft)?;
+
+        // empty parameters list
+        if self.accept_optional(Token::RoundRight)?.is_some() {
+            return Ok(&[]);
         }
+
+        let mut parameters = Vec::new_in(self.arena);
+        parameters.push(self.parse_parameter()?);
+
+        while self.accept_optional(tok![,])?.is_some() {
+            // for trailing comma
+            if self.accept_optional(Token::RoundRight)?.is_some() {
+                return Ok(parameters.into_bump_slice());
+            }
+
+            parameters.push(self.parse_parameter()?);
+        }
+
+        self.accept_required(Token::RoundRight)?;
+
+        Ok(parameters.into_bump_slice())
+    }
+
+    fn parse_function(&mut self) -> ParseResult<Spanned<Function<'s, 'a>>> {
+        let start_span = self.accept_required(tok![fn])?;
+
+        let name = self.ident()?;
+        let parameters = self.parse_parameters()?;
+        let ret = if self.accept_optional(tok![->])?.is_some() {
+            Some(self.type_spec()?)
+        } else {
+            None
+        };
+
+        let block = self.block()?;
+        let fn_span = start_span.merge(&block.span);
+
+        Ok(Function {
+            name,
+            parameters,
+            ret,
+            block: self.alloc(block),
+        }.with_span(fn_span))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::Parser;
-    use crate::parser::ast::{Block, ExprKind, Ident, Lit, Statement};
+    use crate::parser::ast::{Block, ExprKind, Function, Ident, Lit, Parameter, File, Statement, Item, TypeSpec};
     use crate::parser::span::Spanned;
     use bumpalo::Bump;
 
     macro_rules! assert_matches {
         ($expression:expr, $pattern:pat $(if $guard:expr)? $(,)?) => {
             match $expression {
-                $pattern $(if $guard)? => {},
+                $pattern $(if $guard)? => {}
                 outcome => assert!(false, "expected {:?} to match {}", outcome, stringify!($pattern $(if $guard)?))
             }
         };
@@ -436,6 +528,15 @@ mod test {
             let arena = Bump::new();
             let mut p = Parser::new($source, &arena);
             let e = p.expr().unwrap();
+            assert_matches!(e, $pattern $(if $guard)?)
+        }
+    }
+
+    macro_rules! assert_file_matches {
+        ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
+            let arena = Bump::new();
+            let mut p = Parser::new($source, &arena);
+            let e = p.file().unwrap();
             assert_matches!(e, $pattern $(if $guard)?)
         }
     }
@@ -458,11 +559,19 @@ mod test {
         };
     }
 
-    macro_rules! ident {
+    macro_rules! expr_ident {
         ($i:ident) => {
             spanned!(ExprKind::Ident(Ident {
                 string: stringify!($i),
             }))
+        };
+    }
+
+    macro_rules! ident {
+        ($i:ident) => {
+            spanned!(Ident {
+                string: stringify!($i),
+            })
         };
     }
 
@@ -571,9 +680,9 @@ mod test {
     macro_rules! let_ {
         ($x:ident, $exp:pat) => {
             Statement::Let(
-                Ident {
-                    string: stringify!(x),
-                },
+                spanned!(Ident {
+                    string: stringify!($x),
+                }),
                 $exp,
             )
         };
@@ -585,6 +694,52 @@ mod test {
         };
         ($($stmts:pat),* => $exp:pat) => {
             Block { stmts: &[$($stmts),*], last: Some($exp), .. }
+        };
+    }
+
+    macro_rules! file {
+        ($($items:pat),*) => {
+            File {
+                items: &[$($items),*]
+            }
+        };
+    }
+
+    macro_rules! item {
+        (func: $pat: pat) => {
+            Item::Function(spanned!($pat))
+        };
+    }
+
+    macro_rules! type_spec {
+        (name: $name: ident) => {
+            spanned!(TypeSpec::Name(ident!($name)))
+        };
+    }
+
+    macro_rules! function {
+        (fn $name: ident ($($arg:ident:$ty:pat),*) -> $ret:pat => $block: pat) => {
+            Function {
+                name: ident!($name),
+                parameters: &[$(Parameter {
+                    name: ident!($arg),
+                    type_spec: $ty,
+                }),*],
+                ret: Some($ret),
+                block: $block,
+            }
+        };
+
+        (fn $name: ident ($($arg:ident:$ty:pat),*) => $block: pat) => {
+            Function {
+                name: ident!($name),
+                parameters: &[$(Parameter {
+                    name: ident!($arg),
+                    type_spec: $ty,
+                }),*],
+                ret: None,
+                block: $block,
+            }
         };
     }
 
@@ -691,9 +846,9 @@ mod test {
 
     #[test]
     fn ident() {
-        assert_expr_matches!("foo", ident!(foo));
-        assert_expr_matches!("bar", ident!(bar));
-        assert_expr_matches!("x != y", neq!(ident!(x), ident!(y)));
+        assert_expr_matches!("foo", expr_ident!(foo));
+        assert_expr_matches!("bar", expr_ident!(bar));
+        assert_expr_matches!("x != y", neq!(expr_ident!(x), expr_ident!(y)));
     }
 
     #[test]
@@ -712,7 +867,7 @@ mod test {
             "{ let x = 10; x }",
             block_expr! {
                 let_!(x, int!(10))
-                => ident!(x)
+                => expr_ident!(x)
             }
         );
         assert_expr_matches!(
@@ -760,5 +915,47 @@ mod test {
     fn strings() {
         assert_expr_matches!("\"Hello, world!\"", string!("\"Hello, world!\""));
         assert_expr_matches!("\"\"", string!("\"\""));
+    }
+
+    #[test]
+    fn function() {
+        assert_file_matches!("fn text() {}", file! {item!(func: function! {
+            fn text() => block!()
+        })});
+        assert_file_matches!("fn text(a: int) {}", file! {item!(func: function! {
+            fn text(a: type_spec!(name: int)) => block!()
+        })});
+        assert_file_matches!("fn text(a: int, b: int) {}", file! {item!(func: function! {
+            fn text(a: type_spec!(name: int), b: type_spec!(name: int)) => block!()
+        })});
+        assert_file_matches!("fn text(a: int, b: int,) {}", file! {item!(func: function! {
+            fn text(a: type_spec!(name: int), b: type_spec!(name: int)) => block!()
+        })});
+        assert_file_matches!("fn text(a: int, b: int,) -> int {}", file! {item!(func: function! {
+            fn text(a: type_spec!(name: int), b: type_spec!(name: int)) -> type_spec!(name: int) => block!()
+        })});
+        assert_file_matches!("fn text() {
+            let a = 3;
+        }", file! {item!(func: function! {
+            fn text() => block!(
+                let_!(a, int!(3))
+            )
+        })});
+        assert_file_matches!("
+        fn add(a: int, b: int,) -> int {
+            let c = a + b;
+            c
+        }
+
+        fn main() {
+
+        }
+        ", file! {item!(func: function! {
+            fn add(a: type_spec!(name: int), b: type_spec!(name: int)) -> type_spec!(name: int) => block!(
+                let_!(c, add!(expr_ident!(a), expr_ident!(b))) => expr_ident!(c)
+            )
+        }), item!(func: function! {
+            fn main() => block!()
+        })});
     }
 }
