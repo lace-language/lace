@@ -512,7 +512,7 @@ fn function() {
             )
         }), item!(func: function! {
             fn main() => block!(
-                Statement::Expr(call!(print => [call!(add => [int!(1), int!(2)])]))
+                Statement::Expr(call!(expr_ident!(print) => [call!(expr_ident!(add) => [int!(1), int!(2)])]))
             )
         })}
     );
