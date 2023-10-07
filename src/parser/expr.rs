@@ -3,7 +3,7 @@ use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
 use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
-use bumpalo::collections;
+use bumpalo::collections::Vec;
 
 impl<'s, 'a> Parser<'s, 'a> {
     // TODO: Proper error handling
@@ -129,7 +129,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             return Ok(a.with_span(start_span.merge(&end_span)));
         }
 
-        let mut parameters = collections::Vec::new_in(self.arena);
+        let mut parameters = Vec::new_in(self.arena);
         parameters.push(self.expr()?);
 
         while self.accept_optional(tok![,])?.is_some() {
@@ -211,7 +211,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             return Ok(expr);
         }
 
-        let mut vec = collections::Vec::new_in(self.arena);
+        let mut vec = Vec::new_in(self.arena);
         vec.push(expr);
 
         while self.accept_optional(tok![,])?.is_some() {

@@ -3,7 +3,7 @@ use crate::parser::ast::{Block, Expr, ExprKind, Statement};
 use crate::parser::error::ParseResult;
 use crate::parser::span::WithSpan;
 use crate::parser::Parser;
-use bumpalo::collections;
+use bumpalo::collections::Vec;
 
 impl<'s, 'a> Parser<'s, 'a> {
     fn let_(&mut self) -> ParseResult<Statement<'s, 'a>> {
@@ -27,7 +27,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     pub(super) fn block(&mut self) -> ParseResult<Block<'s, 'a>> {
         let open_span = self.accept_required(Token::CurlyLeft)?;
 
-        let mut vec = collections::Vec::new_in(self.arena);
+        let mut vec = Vec::new_in(self.arena);
 
         loop {
             if let Some(close_span) = self.accept_optional(Token::CurlyRight)? {
