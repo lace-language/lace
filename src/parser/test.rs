@@ -50,7 +50,7 @@ macro_rules! string {
     };
 }
 
-macro_rules! expr_ident {
+macro_rules! ident_expr {
     ($i:ident) => {
         spanned!(ExprKind::Ident(Ident {
             string: stringify!($i),
@@ -156,20 +156,20 @@ macro_rules! neq {
     };
 }
 
+macro_rules! paren {
+    ($x:pat) => {
+        spanned!(ExprKind::Paren($x))
+    };
+}
+
 macro_rules! tuple {
     ($($x:pat),*) => {
         spanned!(ExprKind::Tuple(&[$($x),*]))
     };
 }
 
-macro_rules! exp {
-    ($x:pat) => {
-        Statement::Expr($x)
-    };
-}
-
-macro_rules! let_ {
-    ($x:ident, $ty: pat, $exp:pat) => {
+macro_rules! stmt {
+    (let: $x:ident, $ty: pat, $exp:pat) => {
         Statement::Let(
             spanned!(Ident {
                 string: stringify!($x),
@@ -178,8 +178,7 @@ macro_rules! let_ {
             $exp,
         )
     };
-
-    ($x:ident, $exp:pat) => {
+    (let: $x:ident, $exp:pat) => {
         Statement::Let(
             spanned!(Ident {
                 string: stringify!($x),
@@ -187,6 +186,9 @@ macro_rules! let_ {
             None,
             $exp,
         )
+    };
+    ($x:pat) => {
+        Statement::Expr($x)
     };
 }
 
@@ -328,13 +330,13 @@ fn arithmetic_binop() {
         add!(div!(int!(2), int!(3)), mul!(int!(4), int!(5)))
     );
     assert_expr_matches!("2 + 3 * 4", add!(int!(2), mul!(int!(3), int!(4))));
-    assert_expr_matches!("(2 + 3) * 4", mul!(add!(int!(2), int!(3)), int!(4)));
+    assert_expr_matches!("(2 + 3) * 4", mul!(paren!(add!(int!(2), int!(3))), int!(4)));
 }
 
 #[test]
 fn tuples() {
     assert_expr_matches!("()", tuple!());
-    assert_expr_matches!("(1)", int!(1));
+    assert_expr_matches!("(1)", paren!(int!(1)));
     assert_expr_matches!("(1,)", tuple!(int!(1)));
     assert_expr_matches!("(1,2)", tuple!(int!(1), int!(2)));
     assert_expr_matches!("(1,2,)", tuple!(int!(1), int!(2)));
@@ -354,49 +356,49 @@ fn comparisons() {
 
 #[test]
 fn ident() {
-    assert_expr_matches!("foo", expr_ident!(foo));
-    assert_expr_matches!("bar", expr_ident!(bar));
-    assert_expr_matches!("x != y", neq!(expr_ident!(x), expr_ident!(y)));
+    assert_expr_matches!("foo", ident_expr!(foo));
+    assert_expr_matches!("bar", ident_expr!(bar));
+    assert_expr_matches!("x != y", neq!(ident_expr!(x), ident_expr!(y)));
 }
 
 #[test]
 fn blocks() {
     assert_expr_matches!("{}", block_expr! {});
     assert_expr_matches!("{ 10 }", block_expr! { => int!(10) });
-    assert_expr_matches!("{ 10; }", block_expr! { exp!(int!(10)) });
+    assert_expr_matches!("{ 10; }", block_expr! { stmt!(int!(10)) });
     assert_expr_matches!(
         "{ 10; 20 }",
         block_expr! {
-            exp!(int!(10))
+            stmt!(int!(10))
             => int!(20)
         }
     );
     assert_expr_matches!(
         "{ let x = 10; x }",
         block_expr! {
-            let_!(x, int!(10))
-            => expr_ident!(x)
+            stmt!(let: x, int!(10))
+            => ident_expr!(x)
         }
     );
     assert_expr_matches!(
         "{ let x: int = 10; x }",
         block_expr! {
-            let_!(x, type_spec!(name: int), int!(10))
-            => expr_ident!(x)
+            stmt!(let: x, type_spec!(name: int), int!(10))
+            => ident_expr!(x)
         }
     );
     assert_expr_matches!(
         "{ if 1 { 2 } 3 }",
-        block_expr!(exp!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
+        block_expr!(stmt!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
     );
     assert_expr_matches!(
         "{ if 1 { 2 }; 3 }",
-        block_expr!(exp!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
+        block_expr!(stmt!(if_!(int!(1), block!(=> int!(2)))) => int!(3))
     );
     assert_expr_matches!(
         "{ if 1 { 2 } else { 3 } 4 }",
         block_expr!(
-            exp!(if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))))
+            stmt!(if_!(int!(1), block!(=> int!(2)), block!(=> int!(3))))
             => int!(4)
         )
     );
@@ -434,16 +436,16 @@ fn strings() {
 
 #[test]
 fn call() {
-    assert_expr_matches!("a()", call!(expr_ident!(a) => []));
+    assert_expr_matches!("a()", call!(ident_expr!(a) => []));
     assert_expr_matches!(
         "a(1, 2, 3)",
         call!(
-        expr_ident!(a) => [int!(1), int!(2), int!(3)])
+        ident_expr!(a) => [int!(1), int!(2), int!(3)])
     );
     assert_expr_matches!(
         "a(1, 2, 3,)",
         call!(
-        expr_ident!(a) => [int!(1), int!(2), int!(3)])
+        ident_expr!(a) => [int!(1), int!(2), int!(3)])
     );
 }
 
@@ -485,7 +487,7 @@ fn function() {
     }",
         file! {item!(func: function! {
             fn text() => block!(
-                let_!(a, int!(3))
+                stmt!(let: a, int!(3))
             )
         })}
     );
@@ -502,11 +504,11 @@ fn function() {
     ",
         file! {item!(func: function! {
             fn add(a: type_spec!(name: int), b: type_spec!(name: int)) -> type_spec!(name: int) => block!(
-                let_!(c, add!(expr_ident!(a), expr_ident!(b))) => expr_ident!(c)
+                stmt!(let: c, add!(ident_expr!(a), ident_expr!(b))) => ident_expr!(c)
             )
         }), item!(func: function! {
             fn main() => block!(
-                Statement::Expr(call!(print => [call!(add => [int!(1), int!(2)])]))
+                Statement::Expr(call!(ident_expr!(print) => [call!(ident_expr!(add) => [int!(1), int!(2)])]))
             )
         })}
     );

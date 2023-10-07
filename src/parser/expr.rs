@@ -206,9 +206,9 @@ impl<'s, 'a> Parser<'s, 'a> {
 
         let expr = self.expr()?;
 
-        // TODO: Add parentheses to AST
-        if self.accept_optional(Token::RoundRight)?.is_some() {
-            return Ok(expr);
+        if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
+            let expr = self.alloc(expr);
+            return Ok(ExprKind::Paren(expr).with_span(start_span.merge(&end_span)));
         }
 
         let mut vec = Vec::new_in(self.arena);

@@ -25,16 +25,16 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     pub(super) fn block(&mut self) -> ParseResult<Block<'s, 'a>> {
-        let open_span = self.accept_required(Token::CurlyLeft)?;
+        let start_span = self.accept_required(Token::CurlyLeft)?;
 
         let mut vec = Vec::new_in(self.arena);
 
         loop {
-            if let Some(close_span) = self.accept_optional(Token::CurlyRight)? {
+            if let Some(end_span) = self.accept_optional(Token::CurlyRight)? {
                 return Ok(Block {
                     stmts: vec.into_bump_slice(),
                     last: None,
-                    span: open_span.merge(&close_span),
+                    span: start_span.merge(&end_span),
                 });
             }
             // TODO: Spans for statements
@@ -47,7 +47,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
-                        span: open_span.merge(&close_span),
+                        span: start_span.merge(&close_span),
                     });
                 }
 
@@ -62,7 +62,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
-                        span: open_span.merge(&close_span),
+                        span: start_span.merge(&close_span),
                     });
                 }
             }
