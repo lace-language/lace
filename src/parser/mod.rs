@@ -3,6 +3,7 @@ use crate::parser::ast::File;
 use crate::parser::span::{Span, Spans};
 use bumpalo::Bump;
 use error::{ParseError, ParseResult};
+use miette::NamedSource;
 use std::iter::Peekable;
 
 #[macro_use]
@@ -20,6 +21,7 @@ pub mod type_spec;
 pub mod test;
 
 pub struct Parser<'s, 'a> {
+    file_name: &'s str,
     source: &'s str,
     lexer: Peekable<Lexer<'s>>,
     spans: Spans,
@@ -27,8 +29,9 @@ pub struct Parser<'s, 'a> {
 }
 
 impl<'s, 'a> Parser<'s, 'a> {
-    pub fn new(source: &'s str, arena: &'a Bump) -> Self {
+    pub fn new(file_name: &'s str, source: &'s str, arena: &'a Bump) -> Self {
         Self {
+            file_name,
             source,
             lexer: logos::Lexer::new(source).spanned().peekable(),
             spans: Spans::new(),
@@ -37,8 +40,10 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     pub fn parse(mut self) -> miette::Result<File<'s, 'a>> {
-        self.file()
-            .map_err(|error| miette::Error::from(error).with_source_code(String::from(self.source)))
+        self.file().map_err(|error| {
+            let named_source = NamedSource::new(self.file_name, self.source.to_string());
+            miette::Error::from(error).with_source_code(named_source)
+        })
     }
 
     fn alloc<T>(&mut self, x: T) -> &'a T {
