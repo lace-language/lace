@@ -25,6 +25,8 @@ pub enum Token<'a> {
     EqualsEquals,
     #[token("!=")]
     BangEquals,
+    #[token("->")]
+    RightArrow,
 
     // Single-character operators
     #[token("!")]

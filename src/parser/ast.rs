@@ -28,11 +28,33 @@ pub enum ExprKind<'s, 'a> {
     Lte(&'a Spanned<Self>, &'a Spanned<Self>),
     Eq(&'a Spanned<Self>, &'a Spanned<Self>),
     Neq(&'a Spanned<Self>, &'a Spanned<Self>),
+    Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ident<'s> {
     pub string: &'s str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TypeSpec<'s> {
+    Name(Spanned<Ident<'s>>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Parameter<'s> {
+    pub name: Spanned<Ident<'s>>,
+    pub type_spec: Spanned<TypeSpec<'s>>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Function<'s, 'a> {
+    pub name: Spanned<Ident<'s>>,
+
+    pub parameters: &'a [Parameter<'s>],
+    pub ret: Option<Spanned<TypeSpec<'s>>>,
+
+    pub block: &'a Block<'s, 'a>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -54,5 +76,19 @@ pub enum Lit<'s> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Statement<'s, 'a> {
     Expr(&'a Expr<'s, 'a>),
-    Let(Ident<'s>, &'a Expr<'s, 'a>),
+    Let(
+        Spanned<Ident<'s>>,
+        Option<Spanned<TypeSpec<'s>>>,
+        &'a Expr<'s, 'a>,
+    ),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Item<'s, 'a> {
+    Function(Spanned<Function<'s, 'a>>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct File<'s, 'a> {
+    pub items: &'a [Item<'s, 'a>],
 }
