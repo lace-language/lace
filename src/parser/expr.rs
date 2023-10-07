@@ -60,7 +60,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![!])? {
             let arg = self.inversion()?;
-            let span = self.spans.store_merged(span, arg.span());
+            let span = self.spans.store_merged(span, &arg);
             Ok(ExprKind::Not(self.alloc(arg)).with_span(span))
         } else {
             self.sum()
@@ -112,7 +112,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![-])? {
             let arg = self.call_expr()?;
-            let span = self.spans.store_merged(span, arg.span());
+            let span = self.spans.store_merged(span, &arg);
             Ok(ExprKind::Neg(self.alloc(arg)).with_span(span))
         } else {
             self.call_expr()

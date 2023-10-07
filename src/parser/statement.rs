@@ -90,7 +90,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                 self.block()?
             };
 
-            let span = self.spans.store_merged(start_span, else_block.span());
+            let span = self.spans.store_merged(start_span, &else_block);
             Ok(ExprKind::If(
                 self.alloc(expr),
                 self.alloc(then_block),
@@ -98,7 +98,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             )
             .with_span(span))
         } else {
-            let span = self.spans.store_merged(start_span, then_block.span());
+            let span = self.spans.store_merged(start_span, &then_block);
             Ok(ExprKind::If(self.alloc(expr), self.alloc(then_block), None).with_span(span))
         }
     }

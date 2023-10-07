@@ -29,7 +29,13 @@ impl Spans {
         self.store(a.merge(&b))
     }
 
-    pub fn store_merged(&mut self, span: Span, NodeId(a): NodeId) -> NodeId {
+    pub fn store_merged<T>(
+        &mut self,
+        span: Span,
+        &Spanned {
+            span: NodeId(a), ..
+        }: &Spanned<T>,
+    ) -> NodeId {
         let a = self.0[a];
         self.store(span.merge(&a))
     }
