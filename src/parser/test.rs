@@ -435,10 +435,14 @@ fn strings() {
 #[test]
 fn call() {
     assert_expr_matches!("a()", call!(expr_ident!(a) => []));
-    assert_expr_matches!("a(1, 2, 3)", call!(
+    assert_expr_matches!(
+        "a(1, 2, 3)",
+        call!(
         expr_ident!(a) => [int!(1), int!(2), int!(3)])
     );
-    assert_expr_matches!("a(1, 2, 3,)", call!(
+    assert_expr_matches!(
+        "a(1, 2, 3,)",
+        call!(
         expr_ident!(a) => [int!(1), int!(2), int!(3)])
     );
 }

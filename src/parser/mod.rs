@@ -1,6 +1,6 @@
 use crate::lexer::{Lexer, Token};
-use crate::parser::ast::Expr;
-use crate::parser::span::{Span, WithSpan};
+use crate::parser::ast::File;
+use crate::parser::span::Span;
 use bumpalo::Bump;
 use error::{ParseError, ParseResult};
 use std::iter::Peekable;
@@ -34,8 +34,8 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
     }
 
-    pub fn parse(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        self.expr()
+    pub fn parse(&mut self) -> ParseResult<File<'s, 'a>> {
+        self.file()
     }
 
     fn alloc<T>(&mut self, x: T) -> &'a T {

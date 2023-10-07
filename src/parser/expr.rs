@@ -135,7 +135,9 @@ impl<'s, 'a> Parser<'s, 'a> {
         while self.accept_optional(tok![,])?.is_some() {
             // for trailing comma
             if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
-                return Ok(parameters.into_bump_slice().with_span(start_span.merge(&end_span)));
+                return Ok(parameters
+                    .into_bump_slice()
+                    .with_span(start_span.merge(&end_span)));
             }
 
             parameters.push(self.expr()?);
@@ -143,7 +145,9 @@ impl<'s, 'a> Parser<'s, 'a> {
 
         let end_span = self.accept_required(Token::RoundRight)?;
 
-        Ok(parameters.into_bump_slice().with_span(start_span.merge(&end_span)))
+        Ok(parameters
+            .into_bump_slice()
+            .with_span(start_span.merge(&end_span)))
     }
 
     fn call_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {

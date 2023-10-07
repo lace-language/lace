@@ -76,7 +76,11 @@ pub enum Lit<'s> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Statement<'s, 'a> {
     Expr(&'a Expr<'s, 'a>),
-    Let(Spanned<Ident<'s>>, Option<Spanned<TypeSpec<'s>>>, &'a Expr<'s, 'a>),
+    Let(
+        Spanned<Ident<'s>>,
+        Option<Spanned<TypeSpec<'s>>>,
+        &'a Expr<'s, 'a>,
+    ),
 }
 
 #[derive(Debug, PartialEq, Eq)]
