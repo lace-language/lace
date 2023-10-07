@@ -111,11 +111,51 @@ impl<'s, 'a> Parser<'s, 'a> {
     //        | atom
     fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![-])? {
-            let arg = self.atom()?;
+            let arg = self.call_expr()?;
             let span = span.merge(arg.span());
             Ok(ExprKind::Neg(self.alloc(arg)).with_span(span))
         } else {
-            self.atom()
+            self.call_expr()
+        }
+    }
+
+    fn call_args(&mut self) -> ParseResult<Spanned<&'a [Expr<'s, 'a>]>> {
+        let start_span = self.accept_required(Token::RoundLeft)?;
+
+        // empty parameters list
+        if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
+            // yes, this is really necessary.
+            let a: &[_] = &[];
+            return Ok(a.with_span(start_span.merge(&end_span)));
+        }
+
+        let mut parameters = collections::Vec::new_in(self.arena);
+        parameters.push(self.expr()?);
+
+        while self.accept_optional(tok![,])?.is_some() {
+            // for trailing comma
+            if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
+                return Ok(parameters.into_bump_slice().with_span(start_span.merge(&end_span)));
+            }
+
+            parameters.push(self.expr()?);
+        }
+
+        let end_span = self.accept_required(Token::RoundRight)?;
+
+        Ok(parameters.into_bump_slice().with_span(start_span.merge(&end_span)))
+    }
+
+    fn call_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
+        let atom = self.atom()?;
+
+        if self.peek_is(Token::RoundLeft)? {
+            let args = self.call_args()?;
+
+            let span = atom.span().merge(args.span());
+            Ok(ExprKind::Call(self.alloc(atom), args).with_span(span))
+        } else {
+            Ok(atom)
         }
     }
 

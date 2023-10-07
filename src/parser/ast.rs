@@ -28,6 +28,7 @@ pub enum ExprKind<'s, 'a> {
     Lte(&'a Spanned<Self>, &'a Spanned<Self>),
     Eq(&'a Spanned<Self>, &'a Spanned<Self>),
     Neq(&'a Spanned<Self>, &'a Spanned<Self>),
+    Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
 }
 
 #[derive(Debug, PartialEq, Eq)]

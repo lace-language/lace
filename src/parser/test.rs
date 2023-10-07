@@ -190,6 +190,12 @@ macro_rules! let_ {
     };
 }
 
+macro_rules! call {
+    ($callee: pat => [$($arg: pat),*]) => {
+        spanned!(ExprKind::Call($callee, spanned!(&[$($arg),*])))
+    };
+}
+
 macro_rules! block {
     ($($stmts:pat),*) => {
         Block { stmts: &[$($stmts),*], last: None, .. }
@@ -427,6 +433,17 @@ fn strings() {
 }
 
 #[test]
+fn call() {
+    assert_expr_matches!("a()", call!(expr_ident!(a) => []));
+    assert_expr_matches!("a(1, 2, 3)", call!(
+        expr_ident!(a) => [int!(1), int!(2), int!(3)])
+    );
+    assert_expr_matches!("a(1, 2, 3,)", call!(
+        expr_ident!(a) => [int!(1), int!(2), int!(3)])
+    );
+}
+
+#[test]
 fn function() {
     assert_file_matches!(
         "fn text() {}",
@@ -476,7 +493,7 @@ fn function() {
     }
 
     fn main() {
-
+        print(add(1, 2));
     }
     ",
         file! {item!(func: function! {
@@ -484,7 +501,9 @@ fn function() {
                 let_!(c, add!(expr_ident!(a), expr_ident!(b))) => expr_ident!(c)
             )
         }), item!(func: function! {
-            fn main() => block!()
+            fn main() => block!(
+                Statement::Expr(call!(print => [call!(add => [int!(1), int!(2)])]))
+            )
         })}
     );
 }
