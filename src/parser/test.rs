@@ -156,6 +156,12 @@ macro_rules! neq {
     };
 }
 
+macro_rules! paren {
+    ($x:pat) => {
+        spanned!(ExprKind::Paren($x))
+    };
+}
+
 macro_rules! tuple {
     ($($x:pat),*) => {
         spanned!(ExprKind::Tuple(&[$($x),*]))
@@ -328,13 +334,13 @@ fn arithmetic_binop() {
         add!(div!(int!(2), int!(3)), mul!(int!(4), int!(5)))
     );
     assert_expr_matches!("2 + 3 * 4", add!(int!(2), mul!(int!(3), int!(4))));
-    assert_expr_matches!("(2 + 3) * 4", mul!(add!(int!(2), int!(3)), int!(4)));
+    assert_expr_matches!("(2 + 3) * 4", mul!(paren!(add!(int!(2), int!(3))), int!(4)));
 }
 
 #[test]
 fn tuples() {
     assert_expr_matches!("()", tuple!());
-    assert_expr_matches!("(1)", int!(1));
+    assert_expr_matches!("(1)", paren!(int!(1)));
     assert_expr_matches!("(1,)", tuple!(int!(1)));
     assert_expr_matches!("(1,2)", tuple!(int!(1), int!(2)));
     assert_expr_matches!("(1,2,)", tuple!(int!(1), int!(2)));

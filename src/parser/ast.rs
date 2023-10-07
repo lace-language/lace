@@ -14,6 +14,7 @@ pub enum ExprKind<'s, 'a> {
     Block(&'a Block<'s, 'a>),
     Ident(Ident<'s>),
     Neg(&'a Spanned<Self>),
+    Paren(&'a Spanned<Self>),
     Mul(&'a Spanned<Self>, &'a Spanned<Self>),
     Div(&'a Spanned<Self>, &'a Spanned<Self>),
     Add(&'a Spanned<Self>, &'a Spanned<Self>),
