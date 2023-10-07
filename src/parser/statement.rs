@@ -6,6 +6,24 @@ use crate::parser::Parser;
 use bumpalo::collections;
 
 impl<'s, 'a> Parser<'s, 'a> {
+    fn let_(&mut self) -> ParseResult<Statement<'s, 'a>> {
+        self.accept_required(tok![let])?;
+
+        let ident = self.ident()?;
+
+        let type_spec = if self.accept_optional(tok![:])?.is_some() {
+            Some(self.type_spec()?)
+        } else {
+            None
+        };
+
+        self.accept_required(tok![=])?;
+        let expr = self.expr()?;
+        self.accept_required(tok![;])?;
+
+        Ok(Statement::Let(ident, type_spec, self.alloc(expr)))
+    }
+
     pub(super) fn block(&mut self) -> ParseResult<Block<'s, 'a>> {
         let open_span = self.accept_required(Token::CurlyLeft)?;
 
@@ -20,12 +38,8 @@ impl<'s, 'a> Parser<'s, 'a> {
                 });
             }
             // TODO: Spans for statements
-            if self.accept_optional(tok![let])?.is_some() {
-                let ident = self.ident()?;
-                self.accept_required(tok![=])?;
-                let expr = self.expr()?;
-                self.accept_required(tok![;])?;
-                vec.push(Statement::Let(ident, self.alloc(expr)));
+            if self.peek_is(tok![let])? {
+                vec.push(self.let_()?);
             } else if self.peek_is(tok![if])? {
                 let expr = self.if_else()?;
 

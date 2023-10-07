@@ -169,11 +169,22 @@ macro_rules! exp {
 }
 
 macro_rules! let_ {
+    ($x:ident, $ty: pat, $exp:pat) => {
+        Statement::Let(
+            spanned!(Ident {
+                string: stringify!($x),
+            }),
+            Some($ty),
+            $exp,
+        )
+    };
+
     ($x:ident, $exp:pat) => {
         Statement::Let(
             spanned!(Ident {
                 string: stringify!($x),
             }),
+            None,
             $exp,
         )
     };
@@ -358,6 +369,13 @@ fn blocks() {
         "{ let x = 10; x }",
         block_expr! {
             let_!(x, int!(10))
+            => expr_ident!(x)
+        }
+    );
+    assert_expr_matches!(
+        "{ let x: int = 10; x }",
+        block_expr! {
+            let_!(x, type_spec!(name: int), int!(10))
             => expr_ident!(x)
         }
     );
