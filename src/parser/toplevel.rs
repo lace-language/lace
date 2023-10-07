@@ -21,7 +21,12 @@ impl<'s, 'a> Parser<'s, 'a> {
         if self.peek_is(tok![fn])? {
             Ok(Item::Function(self.parse_function()?))
         } else {
-            Err(ParseError::Expected)
+            let (token, span) = self.next()?;
+            Err(ParseError::Expected {
+                expected: "an item, such as a function".into(),
+                got: token.to_string(),
+                span,
+            })
         }
     }
 }

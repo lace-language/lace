@@ -3,6 +3,7 @@ use crate::parser::ast::File;
 use crate::parser::span::{Span, Spans};
 use bumpalo::Bump;
 use error::{ParseError, ParseResult};
+use miette::NamedSource;
 use std::iter::Peekable;
 
 #[macro_use]
@@ -20,24 +21,29 @@ pub mod type_spec;
 pub mod test;
 
 pub struct Parser<'s, 'a> {
-    _source: &'s str,
+    file_name: &'s str,
+    source: &'s str,
     lexer: Peekable<Lexer<'s>>,
     spans: Spans,
     arena: &'a Bump,
 }
 
 impl<'s, 'a> Parser<'s, 'a> {
-    pub fn new(source: &'s str, arena: &'a Bump) -> Self {
+    pub fn new(file_name: &'s str, source: &'s str, arena: &'a Bump) -> Self {
         Self {
-            _source: source,
+            file_name,
+            source,
             lexer: logos::Lexer::new(source).spanned().peekable(),
             spans: Spans::new(),
             arena,
         }
     }
 
-    pub fn parse(mut self) -> ParseResult<File<'s, 'a>> {
-        self.file()
+    pub fn parse(mut self) -> miette::Result<File<'s, 'a>> {
+        self.file().map_err(|error| {
+            let named_source = NamedSource::new(self.file_name, self.source.to_string());
+            miette::Error::from(error).with_source_code(named_source)
+        })
     }
 
     fn alloc<T>(&mut self, x: T) -> &'a T {
@@ -51,7 +57,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn next(&mut self) -> ParseResult<(Token<'s>, Span)> {
         match self.lexer.next() {
             Some((Ok(t), s)) => Ok((t, s.into())),
-            Some((Err(_), _)) => Err(ParseError::UnrecognizedToken(())),
+            Some((Err(_), span)) => Err(ParseError::UnrecognizedToken { span: span.into() }),
             None => Err(ParseError::EndOfInput),
         }
     }
@@ -59,7 +65,9 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn peek(&mut self) -> ParseResult<Option<Token<'s>>> {
         match self.lexer.peek() {
             Some((Ok(t), _)) => Ok(Some(*t)),
-            Some((Err(_), _)) => Err(ParseError::UnrecognizedToken(())),
+            Some((Err(_), span)) => Err(ParseError::UnrecognizedToken {
+                span: span.clone().into(),
+            }),
             None => Ok(None),
         }
     }
@@ -85,7 +93,11 @@ impl<'s, 'a> Parser<'s, 'a> {
         if next == token {
             Ok(span)
         } else {
-            Err(ParseError::Expected)
+            Err(ParseError::Expected {
+                expected: token.to_string(),
+                got: next.to_string(),
+                span,
+            })
         }
     }
 }

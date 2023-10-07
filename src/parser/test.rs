@@ -17,7 +17,7 @@ macro_rules! assert_matches {
 macro_rules! assert_expr_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
-        let mut p = Parser::new($source, &arena);
+        let mut p = Parser::new("test", $source, &arena);
         let e = p.expr().unwrap();
         assert_matches!(e, $pattern $(if $guard)?)
     }
@@ -26,7 +26,7 @@ macro_rules! assert_expr_matches {
 macro_rules! assert_file_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
-        let mut p = Parser::new($source, &arena);
+        let mut p = Parser::new("test", $source, &arena);
         let e = p.file().unwrap();
         assert_matches!(e, $pattern $(if $guard)?)
     }

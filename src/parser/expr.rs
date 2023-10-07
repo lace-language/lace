@@ -176,23 +176,34 @@ impl<'s, 'a> Parser<'s, 'a> {
             return self.if_else();
         }
 
-        let (token, span) = self.next()?;
-        let span = self.spans.store(span);
+        let (token, raw_span) = self.next()?;
+        let span = self.spans.store(raw_span);
         let expr = match token {
             Token::Ident(s) => ExprKind::Ident(Ident { string: s }).with_span(span),
             Token::False => ExprKind::Lit(Lit::Bool(false)).with_span(span),
             Token::True => ExprKind::Lit(Lit::Bool(true)).with_span(span),
             Token::String(s) => ExprKind::Lit(Lit::String(s)).with_span(span),
             Token::Int(i) => ExprKind::Lit(Lit::Int(i)).with_span(span),
-            _ => return Err(ParseError::Expected),
+            t => {
+                return Err(ParseError::Expected {
+                    expected: "an expression".into(),
+                    got: t.to_string(),
+                    span: raw_span,
+                })
+            }
         };
 
         Ok(expr)
     }
 
     pub(super) fn ident(&mut self) -> ParseResult<Spanned<Ident<'s>>> {
-        let (Token::Ident(name), name_span) = self.next()? else {
-            return Err(ParseError::Expected);
+        let (token, name_span) = self.next()?;
+        let Token::Ident(name) = token else {
+            return Err(ParseError::Expected {
+                expected: "an identifier".into(),
+                got: token.to_string(),
+                span: name_span,
+            });
         };
 
         Ok(Ident { string: name }.with_span(self.spans.store(name_span)))
