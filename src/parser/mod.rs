@@ -1,6 +1,6 @@
 use crate::lexer::{Lexer, Token};
 use crate::parser::ast::File;
-use crate::parser::span::Span;
+use crate::parser::span::{Span, Spans};
 use bumpalo::Bump;
 use error::{ParseError, ParseResult};
 use std::iter::Peekable;
@@ -22,6 +22,7 @@ pub mod test;
 pub struct Parser<'s, 'a> {
     _source: &'s str,
     lexer: Peekable<Lexer<'s>>,
+    spans: Spans,
     arena: &'a Bump,
 }
 
@@ -30,6 +31,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Self {
             _source: source,
             lexer: logos::Lexer::new(source).spanned().peekable(),
+            spans: Spans::new(),
             arena,
         }
     }

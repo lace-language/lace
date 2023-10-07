@@ -1,20 +1,55 @@
 use std::ops::{Deref, DerefMut};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodeId(usize);
+
+pub struct Spans(Vec<Span>);
+
+impl Spans {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn store(&mut self, span: Span) -> NodeId {
+        self.0.push(span);
+        NodeId(self.0.len() - 1)
+    }
+
+    pub fn merge<A, B>(
+        &mut self,
+        &Spanned {
+            span: NodeId(a), ..
+        }: &Spanned<A>,
+        &Spanned {
+            span: NodeId(b), ..
+        }: &Spanned<B>,
+    ) -> NodeId {
+        let a = self.0[a];
+        let b = self.0[b];
+        self.store(a.merge(&b))
+    }
+
+    pub fn store_merged(&mut self, span: Span, NodeId(a): NodeId) -> NodeId {
+        let a = self.0[a];
+        self.store(span.merge(&a))
+    }
+}
+
 pub trait WithSpan {
-    fn with_span(self, span: Span) -> Spanned<Self>
+    fn with_span(self, span: NodeId) -> Spanned<Self>
     where
         Self: Sized;
 }
 
 impl<T> WithSpan for T {
-    fn with_span(self, span: Span) -> Spanned<Self> {
+    fn with_span(self, span: NodeId) -> Spanned<Self> {
         Spanned { span, value: self }
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Spanned<T> {
-    pub span: Span,
+    pub span: NodeId,
     pub value: T,
 }
 
@@ -33,8 +68,8 @@ impl<T> DerefMut for Spanned<T> {
 }
 
 impl<T> Spanned<T> {
-    pub fn span(&self) -> &Span {
-        &self.span
+    pub fn span(&self) -> NodeId {
+        self.span
     }
 }
 

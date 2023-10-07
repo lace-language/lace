@@ -51,7 +51,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         };
 
         let block = self.block()?;
-        let fn_span = start_span.merge(&block.span);
+        let fn_span = self.spans.store_merged(start_span, block.span());
 
         Ok(Function {
             name,

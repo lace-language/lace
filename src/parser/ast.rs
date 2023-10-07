@@ -1,4 +1,4 @@
-use crate::parser::span::{Span, Spanned};
+use crate::parser::span::Spanned;
 
 pub type Expr<'s, 'a> = Spanned<ExprKind<'s, 'a>>;
 
@@ -8,10 +8,10 @@ pub enum ExprKind<'s, 'a> {
     Lit(Lit<'s>),
     If(
         &'a Spanned<Self>,
-        &'a Block<'s, 'a>,
-        Option<&'a Block<'s, 'a>>,
+        &'a Spanned<Block<'s, 'a>>,
+        Option<&'a Spanned<Block<'s, 'a>>>,
     ),
-    Block(&'a Block<'s, 'a>),
+    Block(&'a Spanned<Block<'s, 'a>>),
     Ident(Ident<'s>),
     Neg(&'a Spanned<Self>),
     Paren(&'a Spanned<Self>),
@@ -55,14 +55,13 @@ pub struct Function<'s, 'a> {
     pub parameters: &'a [Parameter<'s>],
     pub ret: Option<Spanned<TypeSpec<'s>>>,
 
-    pub block: &'a Block<'s, 'a>,
+    pub block: &'a Spanned<Block<'s, 'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Block<'s, 'a> {
     pub stmts: &'a [Statement<'s, 'a>],
     pub last: Option<Expr<'s, 'a>>,
-    pub span: Span,
 }
 
 /// Literal values

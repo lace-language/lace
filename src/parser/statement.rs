@@ -5,6 +5,8 @@ use crate::parser::span::WithSpan;
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
 
+use super::span::Spanned;
+
 impl<'s, 'a> Parser<'s, 'a> {
     fn let_(&mut self) -> ParseResult<Statement<'s, 'a>> {
         self.accept_required(tok![let])?;
@@ -24,7 +26,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(Statement::Let(ident, type_spec, self.alloc(expr)))
     }
 
-    pub(super) fn block(&mut self) -> ParseResult<Block<'s, 'a>> {
+    pub(super) fn block(&mut self) -> ParseResult<Spanned<Block<'s, 'a>>> {
         let start_span = self.accept_required(Token::CurlyLeft)?;
 
         let mut vec = Vec::new_in(self.arena);
@@ -34,8 +36,8 @@ impl<'s, 'a> Parser<'s, 'a> {
                 return Ok(Block {
                     stmts: vec.into_bump_slice(),
                     last: None,
-                    span: start_span.merge(&end_span),
-                });
+                }
+                .with_span(self.spans.store(start_span.merge(&end_span))));
             }
             // TODO: Spans for statements
             if self.peek_is(tok![let])? {
@@ -43,12 +45,12 @@ impl<'s, 'a> Parser<'s, 'a> {
             } else if self.peek_is(tok![if])? {
                 let expr = self.if_else()?;
 
-                if let Some(close_span) = self.accept_optional(Token::CurlyRight)? {
+                if let Some(end_span) = self.accept_optional(Token::CurlyRight)? {
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
-                        span: start_span.merge(&close_span),
-                    });
+                    }
+                    .with_span(self.spans.store(start_span.merge(&end_span))));
                 }
 
                 self.accept_optional(tok![;])?;
@@ -58,12 +60,12 @@ impl<'s, 'a> Parser<'s, 'a> {
                 if self.accept_optional(tok![;])?.is_some() {
                     vec.push(Statement::Expr(self.alloc(expr)));
                 } else {
-                    let close_span = self.accept_required(Token::CurlyRight)?;
+                    let end_span = self.accept_required(Token::CurlyRight)?;
                     return Ok(Block {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
-                        span: start_span.merge(&close_span),
-                    });
+                    }
+                    .with_span(self.spans.store(start_span.merge(&end_span))));
                 }
             }
         }
@@ -78,17 +80,17 @@ impl<'s, 'a> Parser<'s, 'a> {
         if self.accept_optional(tok![else])?.is_some() {
             let else_block = if self.peek_is(tok![if])? {
                 let else_if = self.if_else()?;
-                let span = else_if.span;
+                let span = else_if.span();
                 Block {
                     stmts: &[],
                     last: Some(else_if),
-                    span,
                 }
+                .with_span(span)
             } else {
                 self.block()?
             };
 
-            let span = start_span.merge(&else_block.span);
+            let span = self.spans.store_merged(start_span, else_block.span());
             Ok(ExprKind::If(
                 self.alloc(expr),
                 self.alloc(then_block),
@@ -96,7 +98,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             )
             .with_span(span))
         } else {
-            let span = start_span.merge(&then_block.span);
+            let span = self.spans.store_merged(start_span, then_block.span());
             Ok(ExprKind::If(self.alloc(expr), self.alloc(then_block), None).with_span(span))
         }
     }
