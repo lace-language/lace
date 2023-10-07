@@ -20,7 +20,7 @@ pub mod type_spec;
 pub mod test;
 
 pub struct Parser<'s, 'a> {
-    _source: &'s str,
+    source: &'s str,
     lexer: Peekable<Lexer<'s>>,
     spans: Spans,
     arena: &'a Bump,
@@ -29,15 +29,16 @@ pub struct Parser<'s, 'a> {
 impl<'s, 'a> Parser<'s, 'a> {
     pub fn new(source: &'s str, arena: &'a Bump) -> Self {
         Self {
-            _source: source,
+            source,
             lexer: logos::Lexer::new(source).spanned().peekable(),
             spans: Spans::new(),
             arena,
         }
     }
 
-    pub fn parse(mut self) -> ParseResult<File<'s, 'a>> {
+    pub fn parse(mut self) -> miette::Result<File<'s, 'a>> {
         self.file()
+            .map_err(|error| miette::Error::from(error).with_source_code(String::from(self.source)))
     }
 
     fn alloc<T>(&mut self, x: T) -> &'a T {
@@ -51,7 +52,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn next(&mut self) -> ParseResult<(Token<'s>, Span)> {
         match self.lexer.next() {
             Some((Ok(t), s)) => Ok((t, s.into())),
-            Some((Err(_), _)) => Err(ParseError::UnrecognizedToken(())),
+            Some((Err(_), span)) => Err(ParseError::UnrecognizedToken { span: span.into() }),
             None => Err(ParseError::EndOfInput),
         }
     }
@@ -59,7 +60,9 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn peek(&mut self) -> ParseResult<Option<Token<'s>>> {
         match self.lexer.peek() {
             Some((Ok(t), _)) => Ok(Some(*t)),
-            Some((Err(_), _)) => Err(ParseError::UnrecognizedToken(())),
+            Some((Err(_), span)) => Err(ParseError::UnrecognizedToken {
+                span: span.clone().into(),
+            }),
             None => Ok(None),
         }
     }
@@ -85,7 +88,11 @@ impl<'s, 'a> Parser<'s, 'a> {
         if next == token {
             Ok(span)
         } else {
-            Err(ParseError::Expected)
+            Err(ParseError::Expected {
+                expected: token.to_string(),
+                got: next.to_string(),
+                span,
+            })
         }
     }
 }

@@ -85,6 +85,12 @@ pub struct Span {
     length: u32,
 }
 
+impl From<Span> for miette::SourceSpan {
+    fn from(span: Span) -> Self {
+        Self::from((span.offset(), span.length()))
+    }
+}
+
 impl From<logos::Span> for Span {
     fn from(value: logos::Span) -> Self {
         Self::new(value.start as u32, (value.end - value.start) as u32)

@@ -7,8 +7,9 @@ mod parser;
 use bumpalo::Bump;
 use parser::Parser;
 
-fn main() {
+fn main() -> miette::Result<()> {
     let arena = Bump::new();
-    let parser = Parser::new("1 + 1", &arena);
-    println!("{:?}", parser.parse());
+    let parser = Parser::new("fn foo() { let 10 = 10; }", &arena);
+    println!("{:?}", parser.parse()?);
+    Ok(())
 }

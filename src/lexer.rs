@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use logos::{Logos, SpannedIter};
 
 pub type Lexer<'s> = SpannedIter<'s, Token<'s>>;
@@ -81,4 +83,43 @@ pub enum Token<'a> {
     AngleLeft,
     #[token(">")]
     AngleRight,
+}
+
+impl<'a> Display for Token<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Token::Ident(s) | Token::String(s) | Token::Int(s) => s,
+            Token::AmpAmp => "&&",
+            Token::PipePipe => "||",
+            Token::AngleLeftEquals => "<=",
+            Token::AngleRightEquals => ">=",
+            Token::EqualsEquals => "==",
+            Token::BangEquals => "!=",
+            Token::RightArrow => "->",
+            Token::Bang => "!",
+            Token::Plus => "+",
+            Token::Minus => "-",
+            Token::Star => "*",
+            Token::Slash => "/",
+            Token::Period => ".",
+            Token::Comma => ",",
+            Token::Semicolon => ";",
+            Token::Colon => ":",
+            Token::Equals => "=",
+            Token::Fn => "fn",
+            Token::Let => "let",
+            Token::If => "if",
+            Token::Else => "else",
+            Token::False => "false",
+            Token::True => "true",
+            Token::RoundLeft => "(",
+            Token::RoundRight => ")",
+            Token::CurlyLeft => "{",
+            Token::CurlyRight => "}",
+            Token::SquareLeft => "[",
+            Token::SquareRight => "]",
+            Token::AngleLeft => "<",
+            Token::AngleRight => ">",
+        })
+    }
 }
