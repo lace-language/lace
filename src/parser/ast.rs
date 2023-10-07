@@ -80,10 +80,10 @@ pub enum Statement<'s, 'a> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Item<'s, 'a> {
-    Function(Spanned<Function<'s, 'a>>)
+    Function(Spanned<Function<'s, 'a>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct File<'s, 'a> {
-    pub items: &'a [Item<'s, 'a>]
+    pub items: &'a [Item<'s, 'a>],
 }
