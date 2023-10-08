@@ -2,6 +2,7 @@
 
 mod ice;
 mod lexer;
+mod nameres;
 mod parser;
 
 use bumpalo::Bump;
@@ -21,6 +22,8 @@ fn main() -> miette::Result<()> {
 
     let arena = Bump::new();
     let parser = Parser::new(file_name, &contents, &arena);
-    println!("{:?}", parser.parse()?);
+    let (_spans, ast) = parser.parse()?;
+    nameres::Graph::new(file_name).resolve(&ast);
+    // println!("{:?}", parser.parse()?);
     Ok(())
 }

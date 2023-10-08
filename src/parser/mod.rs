@@ -39,11 +39,14 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
     }
 
-    pub fn parse(mut self) -> miette::Result<File<'s, 'a>> {
-        self.file().map_err(|error| {
-            let named_source = NamedSource::new(self.file_name, self.source.to_string());
-            miette::Error::from(error).with_source_code(named_source)
-        })
+    pub fn parse(mut self) -> miette::Result<(Spans, File<'s, 'a>)> {
+        match self.file() {
+            Ok(f) => Ok((self.spans, f)),
+            Err(error) => {
+                let named_source = NamedSource::new(self.file_name, self.source.to_string());
+                Err(miette::Error::from(error).with_source_code(named_source))
+            }
+        }
     }
 
     fn alloc<T>(&mut self, x: T) -> &'a T {
