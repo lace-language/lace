@@ -3,11 +3,11 @@ default:
 
 check:
   cargo fmt --check
-  cargo clippy
+  just clippy
   cargo test
 
 fmt:
   cargo fmt
 
 clippy:
-  cargo clippy
+  cargo clippy --all -- -D warnings

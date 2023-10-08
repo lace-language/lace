@@ -1,16 +1,13 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::Deref,
-};
+use std::{collections::BTreeMap, ops::Deref};
 
 use crate::parser::{
-    ast::{Block, Expr, ExprKind, File, Ident, Item},
-    span::{NodeId, Spanned, WithSpan},
+    ast::{Block, Expr, ExprKind, File, Ident, Item, Statement},
+    span::{NodeId, Spanned},
 };
 use stack_graphs::{
     arena::Handle,
     graph::{Node, NodeID as GraphId, StackGraph, Symbol},
-    partial::PartialPaths,
+    partial::{PartialPath, PartialPaths},
     serde::NoFilter,
     stitching::{Database, ForwardPartialPathStitcher, GraphEdges},
     NoCancellation,
@@ -104,7 +101,7 @@ impl<'s, 'a> Graph {
 
         for param in f.parameters {
             let param_def = self.new_definition(&param.name);
-            self.edge(internal_scope, param_def, 0);
+            self.edge(internal_scope, param_def, 1);
             self.block(internal_scope, f.block);
         }
     }
@@ -114,10 +111,27 @@ impl<'s, 'a> Graph {
         let block_scope = self.new_scope(false);
         self.edge(block_scope, scope, 0);
 
+        let mut last_scope = block_scope;
         // TODO: stmts
+        for stmt in block.stmts {
+            match stmt {
+                Statement::Expr(expr) => self.expr(last_scope, expr),
+                Statement::Let(ident, _, expr) => {
+                    // Expr in the scope _before_ the let
+                    self.expr(last_scope, expr);
+
+                    // Update the scope
+                    let let_scope = self.new_scope(false);
+                    self.edge(let_scope, last_scope, 0);
+                    let def_id = self.new_definition(ident);
+                    self.edge(let_scope, def_id, 1);
+                    last_scope = let_scope;
+                }
+            }
+        }
 
         if let Some(expr) = &block.last {
-            self.expr(block_scope, expr);
+            self.expr(last_scope, expr);
         }
     }
 
@@ -174,25 +188,33 @@ impl<'s, 'a> Graph {
 
     fn print(&self) -> Vec<(NodeId, NodeId)> {
         let mut paths = PartialPaths::new();
-        let mut results = Vec::new();
+
         let references = self
             .graph
             .iter_nodes()
             .filter(|handle| self.graph[*handle].is_reference());
 
+        let mut results = Vec::<PartialPath>::new();
         ForwardPartialPathStitcher::find_all_complete_partial_paths(
             &self.graph,
             &mut paths,
             &mut GraphEdges(None),
             references,
             &NoCancellation,
-            |graph, _paths, path| {
-                let start = self.id_map.get(&graph[path.start_node].id()).unwrap();
-                let end = self.id_map.get(&graph[path.end_node].id()).unwrap();
-                results.push((*start, *end))
+            |_graph, _paths, path| {
+                results.push(path.clone());
             },
         )
         .unwrap();
+
+        let mut no_shadow_results = Vec::new();
+        for res in &results {
+            if results.iter().all(|other| !other.shadows(&mut paths, res)) {
+                let start = self.id_map.get(&self.graph[res.start_node].id()).unwrap();
+                let end = self.id_map.get(&self.graph[res.end_node].id()).unwrap();
+                no_shadow_results.push((*start, *end))
+            }
+        }
 
         print!(
             "{}",
@@ -201,6 +223,6 @@ impl<'s, 'a> Graph {
                 .unwrap()
         );
 
-        results
+        no_shadow_results
     }
 }
