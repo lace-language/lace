@@ -21,10 +21,17 @@ fn main() -> miette::Result<()> {
     let file_name = &cli.file_name;
     let contents = std::fs::read_to_string(file_name).unwrap();
 
+    // Parsing
     let arena = Bump::new();
     let parser = Parser::new(file_name, &contents, &arena);
     let (spans, ast) = parser.parse()?;
-    let resolved = nameres::Graph::new(file_name).resolve(&ast);
+
+    // Name resolution
+    let mut graph = nameres::Graph::new(file_name);
+    let resolved = graph.resolve(&ast);
+
+    // For debugging:
+    graph.print();
 
     let src: &str = contents.leak();
     eprintln!("resolved {}", resolved.len());
