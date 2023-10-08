@@ -52,9 +52,9 @@ macro_rules! string {
 
 macro_rules! ident_expr {
     ($i:ident) => {
-        spanned!(ExprKind::Ident(Ident {
+        spanned!(ExprKind::Ident(spanned!(Ident {
             string: stringify!($i),
-        }))
+        })))
     };
 }
 

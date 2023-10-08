@@ -7,6 +7,7 @@ mod parser;
 
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
+use miette::LabeledSpan;
 use parser::Parser;
 
 #[derive(ClapParser)]
@@ -22,8 +23,22 @@ fn main() -> miette::Result<()> {
 
     let arena = Bump::new();
     let parser = Parser::new(file_name, &contents, &arena);
-    let (_spans, ast) = parser.parse()?;
-    nameres::Graph::new(file_name).resolve(&ast);
+    let (spans, ast) = parser.parse()?;
+    let resolved = nameres::Graph::new(file_name).resolve(&ast);
+
+    let src: &str = contents.leak();
+    eprintln!("resolved {}", resolved.len());
+    for (from, to) in resolved {
+        let report = miette::miette!(
+            labels = vec![
+                LabeledSpan::at(spans.get(from), "reference"),
+                LabeledSpan::at(spans.get(to), "definition"),
+            ],
+            "resolved"
+        )
+        .with_source_code(src);
+        eprintln!("{:?}", report);
+    }
     // println!("{:?}", parser.parse()?);
     Ok(())
 }

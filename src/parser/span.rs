@@ -39,6 +39,10 @@ impl Spans {
         let a = self.0[a];
         self.store(span.merge(&a))
     }
+
+    pub fn get(&self, NodeId(id): NodeId) -> Span {
+        self.0[id]
+    }
 }
 
 pub trait WithSpan {

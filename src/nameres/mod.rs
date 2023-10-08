@@ -1,12 +1,15 @@
-use std::{collections::BTreeSet, ops::Deref};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Deref,
+};
 
 use crate::parser::{
     ast::{Block, Expr, ExprKind, File, Ident, Item},
-    span::Spanned,
+    span::{NodeId, Spanned, WithSpan},
 };
 use stack_graphs::{
     arena::Handle,
-    graph::{Node, NodeID, StackGraph, Symbol},
+    graph::{Node, NodeID as GraphId, StackGraph, Symbol},
     partial::PartialPaths,
     serde::NoFilter,
     stitching::{Database, ForwardPartialPathStitcher, GraphEdges},
@@ -14,18 +17,28 @@ use stack_graphs::{
 };
 
 pub struct Graph {
+    /// The stack graph for this file
     graph: StackGraph,
+    /// The handle to the file (used for creating new node ids)
     file: Handle<stack_graphs::graph::File>,
+    /// Maps from stack graph id to AST id
+    // TODO: make the node
+    id_map: BTreeMap<GraphId, NodeId>,
 }
 
 impl<'s, 'a> Graph {
     pub fn new(file_name: &str) -> Self {
         let mut graph = StackGraph::new();
         let file = graph.get_or_create_file(file_name);
-        Self { graph, file }
+        let id_map = BTreeMap::new();
+        Self {
+            graph,
+            file,
+            id_map,
+        }
     }
 
-    fn new_node_id(&mut self) -> NodeID {
+    fn new_node_id(&mut self) -> GraphId {
         self.graph.new_node_id(self.file)
     }
 
@@ -35,16 +48,23 @@ impl<'s, 'a> Graph {
         self.graph.add_scope_node(node_id, is_exported).unwrap()
     }
 
-    fn new_definition(&mut self, symbol: Handle<Symbol>) -> Handle<Node> {
+    fn new_definition(&mut self, ident: &Spanned<Ident<'s>>) -> Handle<Node> {
+        let symbol = self.add_symbol(ident.deref().string);
         let node_id = self.new_node_id();
+
+        self.id_map.insert(node_id, ident.span);
+
         // Unwrap is fine because we just made the node id
         self.graph
             .add_pop_symbol_node(node_id, symbol, true)
             .unwrap()
     }
 
-    fn new_reference(&mut self, symbol: Handle<Symbol>) -> Handle<Node> {
+    fn new_reference(&mut self, ident: &Spanned<Ident<'s>>) -> Handle<Node> {
+        let symbol = self.add_symbol(ident.deref().string);
         let node_id = self.new_node_id();
+        self.id_map.insert(node_id, ident.span);
+
         // Unwrap is fine because we just made the node id
         self.graph
             .add_push_symbol_node(node_id, symbol, true)
@@ -59,7 +79,7 @@ impl<'s, 'a> Graph {
         self.graph.add_edge(from, to, precedence)
     }
 
-    pub fn resolve(&mut self, ast: &File<'s, 'a>) {
+    pub fn resolve(&mut self, ast: &File<'s, 'a>) -> Vec<(NodeId, NodeId)> {
         let root = StackGraph::root_node();
 
         let module_scope = self.new_scope(false);
@@ -76,16 +96,14 @@ impl<'s, 'a> Graph {
         let Item::Function(f) = item;
         let f = f.deref();
 
-        let symbol = self.add_symbol(f.name.deref().string);
-        let item_def = self.new_definition(symbol);
+        let item_def = self.new_definition(&f.name);
         self.edge(module, item_def, 0);
 
         let internal_scope = self.new_scope(false);
         self.edge(internal_scope, module, 0);
 
         for param in f.parameters {
-            let symbol = self.add_symbol(param.name.deref().string);
-            let param_def = self.new_definition(symbol);
+            let param_def = self.new_definition(&param.name);
             self.edge(internal_scope, param_def, 0);
             self.block(internal_scope, f.block);
         }
@@ -105,13 +123,15 @@ impl<'s, 'a> Graph {
 
     fn expr(&mut self, scope: Handle<Node>, expr: &Expr<'s, 'a>) {
         match expr.deref() {
-            ExprKind::Ident(Ident { string }) => {
-                let symbol = self.add_symbol(string);
-                let ident_ref = self.new_reference(symbol);
+            ExprKind::Ident(ident) => {
+                let ident_ref = self.new_reference(ident);
                 self.edge(ident_ref, scope, 0);
             }
 
+            // Lit contains no further expressions, so we're done
             ExprKind::Lit(_) => {}
+
+            // Identifiers and blocks might be in these variants, so recurse
             ExprKind::If(cond, then_block, option_else_block) => {
                 self.expr(scope, cond);
                 self.block(scope, then_block);
@@ -152,9 +172,9 @@ impl<'s, 'a> Graph {
         }
     }
 
-    fn print(&self) {
+    fn print(&self) -> Vec<(NodeId, NodeId)> {
         let mut paths = PartialPaths::new();
-        let mut results = BTreeSet::new();
+        let mut results = Vec::new();
         let references = self
             .graph
             .iter_nodes()
@@ -166,20 +186,21 @@ impl<'s, 'a> Graph {
             &mut GraphEdges(None),
             references,
             &NoCancellation,
-            |graph, paths, path| {
-                results.insert(path.display(graph, paths).to_string());
+            |graph, _paths, path| {
+                let start = self.id_map.get(&graph[path.start_node].id()).unwrap();
+                let end = self.id_map.get(&graph[path.end_node].id()).unwrap();
+                results.push((*start, *end))
             },
         )
         .unwrap();
 
-        for path in results {
-            eprintln!("{}", path);
-        }
         print!(
             "{}",
             self.graph
                 .to_html_string("", &mut paths, &mut Database::new(), &NoFilter)
                 .unwrap()
         );
+
+        results
     }
 }

@@ -12,7 +12,7 @@ pub enum ExprKind<'s, 'a> {
         Option<&'a Spanned<Block<'s, 'a>>>,
     ),
     Block(&'a Spanned<Block<'s, 'a>>),
-    Ident(Ident<'s>),
+    Ident(Spanned<Ident<'s>>),
     Neg(&'a Spanned<Self>),
     Paren(&'a Spanned<Self>),
     Mul(&'a Spanned<Self>, &'a Spanned<Self>),
