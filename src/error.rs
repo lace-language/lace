@@ -88,7 +88,7 @@ impl<'s, E> Debug for CompilerError<'s, E>
     where E: Into<CompilerErrorKind> + Diagnostic + Clone
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for (e, source) in self.0.iter().rev() {
+        for (e, source) in &self.0 {
             writeln!(f, "{:?}", e.clone().to_miette(source))?;
         }
 
@@ -109,12 +109,11 @@ impl<'s> ErrorContext<'s> {
     }
 
     pub fn finish_compile_make_recoverable_fatal<T>(mut self, v: T) -> Result<T, CompilerError<'s, CompilerErrorKind>> {
-        if self.errors.is_empty() {
-            Ok(v)
+        if let Some(i) = self.errors.pop() {
+            // make the last error the fatal error. All other errors are just "nice to have"
+            Err(CompilerError(mem::take(&mut self.errors), i))
         } else {
-            // make the first error the fatal error. All other errors are just "nice to have"
-            let first = self.errors.remove(0);
-            Err(CompilerError(mem::take(&mut self.errors), first))
+            Ok(v)
         }
     }
 

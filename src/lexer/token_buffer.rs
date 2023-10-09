@@ -51,10 +51,10 @@ pub enum BracketError {
         #[label("closing here")]
         close_span: Span,
     },
-    #[error("closing {} inserted to match previous opening {} while parsing {}", open_type.closing(), open_type.opening(), expected_close_type.closing())]
+    #[error("closing {} expected before this token to match previous opening {}", open_type.closing(), open_type.opening())]
     ClosingInserted {
         open_type: BracketType,
-        #[label("opened here")]
+        #[label("previous opening '{}'", open_type.opening())]
         open_span: Span,
         expected_close_type: BracketType,
         #[label("expected close before this token")]
