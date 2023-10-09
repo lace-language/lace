@@ -1,12 +1,12 @@
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::ast::{Function, Parameter};
 use crate::parser::error::ParseResult;
 use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
 
-impl<'s, 'a> Parser<'s, 'a> {
-    fn parse_parameter(&mut self) -> ParseResult<Parameter<'s>> {
+impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
+    fn parse_parameter(&mut self) -> ParseResult<'s, Parameter<'s>> {
         let name = self.ident()?;
         self.accept_required(tok![:])?;
         let type_spec = self.type_spec()?;
@@ -14,7 +14,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(Parameter { name, type_spec })
     }
 
-    fn parse_parameters(&mut self) -> ParseResult<&'a [Parameter<'s>]> {
+    fn parse_parameters(&mut self) -> ParseResult<'s, &'a [Parameter<'s>]> {
         self.accept_required(Token::RoundLeft)?;
 
         // empty parameters list
@@ -39,7 +39,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(parameters.into_bump_slice())
     }
 
-    pub(super) fn parse_function(&mut self) -> ParseResult<Spanned<Function<'s, 'a>>> {
+    pub(super) fn parse_function(&mut self) -> ParseResult<'s, Spanned<Function<'s, 'a>>> {
         let start_span = self.accept_required(tok![fn])?;
 
         let name = self.ident()?;

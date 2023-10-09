@@ -3,8 +3,8 @@ use crate::parser::error::ParseResult;
 use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
 
-impl<'s, 'a> Parser<'s, 'a> {
-    pub(super) fn type_spec(&mut self) -> ParseResult<Spanned<TypeSpec<'s>>> {
+impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
+    pub(super) fn type_spec(&mut self) -> ParseResult<'s, Spanned<TypeSpec<'s>>> {
         let name = self.ident()?;
         let span = name.span();
 

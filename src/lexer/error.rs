@@ -1,12 +1,13 @@
 use miette::Diagnostic;
 use thiserror::Error;
+use crate::error::CompilerResult;
 use crate::parser::span::Span;
 
-pub type PreparseResult<T> = Result<T, PreparseError>;
+pub type LexResult<'s, T> = CompilerResult<'s, T, LexError>;
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Error, Diagnostic, Debug, Clone)]
 #[diagnostic()]
-pub enum PreparseError {
+pub enum LexError {
 
     // TODO: Figure out how to get the error from logos
     #[error("Unrecognized token")]

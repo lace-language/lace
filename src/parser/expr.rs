@@ -1,18 +1,18 @@
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
 use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
 
-impl<'s, 'a> Parser<'s, 'a> {
+impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
     // TODO: Proper error handling
     // TODO: Function calls
-    pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    pub fn expr(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         self.disjunction()
     }
 
-    fn disjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn disjunction(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         let mut left = self.conjunction()?;
         while self.accept_optional(tok![||])?.is_some() {
             let right = self.conjunction()?;
@@ -24,7 +24,7 @@ impl<'s, 'a> Parser<'s, 'a> {
 
     // conjunction = conjunction 'and' inversion
     //             | inversion
-    fn conjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn conjunction(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         let mut left = self.comparison()?;
         while self.accept_optional(tok![&&])?.is_some() {
             let right = self.comparison()?;
@@ -34,7 +34,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(left)
     }
 
-    fn comparison(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn comparison(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         let left = self.inversion()?;
         let tokens: &[(_, fn(_, _) -> _)] = &[
             (tok![==], ExprKind::Eq),
@@ -57,7 +57,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     // inversion = '!' inversion
     //           | sum
     // TODO: this should go to comparison
-    fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn inversion(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![!])? {
             let arg = self.inversion()?;
             let span = self.spans.store_merged(span, &arg);
@@ -70,7 +70,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     // sum = sum '+' term
     //     | sum '-' term
     //     | term
-    fn sum(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn sum(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         let mut left = self.term()?;
         loop {
             if self.accept_optional(tok![+])?.is_some() {
@@ -90,7 +90,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     // term = term '*' factor
     //      | term '/' factor
     //      | factor
-    fn term(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn term(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         let mut left = self.factor()?;
         loop {
             if self.accept_optional(tok![*])?.is_some() {
@@ -109,7 +109,7 @@ impl<'s, 'a> Parser<'s, 'a> {
 
     // factor = '-' atom
     //        | atom
-    fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn factor(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![-])? {
             let arg = self.call_expr()?;
             let span = self.spans.store_merged(span, &arg);
@@ -119,7 +119,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
     }
 
-    fn call_args(&mut self) -> ParseResult<Spanned<&'a [Expr<'s, 'a>]>> {
+    fn call_args(&mut self) -> ParseResult<'s, Spanned<&'a [Expr<'s, 'a>]>> {
         let start_span = self.accept_required(Token::RoundLeft)?;
 
         // empty parameters list
@@ -150,7 +150,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             .with_span(self.spans.store(start_span.merge(&end_span))))
     }
 
-    fn call_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn call_expr(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         let atom = self.atom()?;
 
         if self.peek_is(Token::RoundLeft)? {
@@ -163,7 +163,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
     }
 
-    fn atom(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn atom(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         if self.peek_is(Token::RoundLeft)? {
             return self.paren();
         } else if self.peek_is(Token::CurlyLeft)? {
@@ -185,31 +185,31 @@ impl<'s, 'a> Parser<'s, 'a> {
             Token::String(s) => ExprKind::Lit(Lit::String(s)).with_span(span),
             Token::Int(i) => ExprKind::Lit(Lit::Int(i)).with_span(span),
             t => {
-                return Err(ParseError::Expected {
+                return self.ectx.fatal(ParseError::Expected {
                     expected: "an expression".into(),
                     got: t.to_string(),
                     span: raw_span,
-                })
+                }, self.source())
             }
         };
 
         Ok(expr)
     }
 
-    pub(super) fn ident(&mut self) -> ParseResult<Spanned<Ident<'s>>> {
+    pub(super) fn ident(&mut self) -> ParseResult<'s, Spanned<Ident<'s>>> {
         let (token, name_span) = self.next()?;
         let Token::Ident(name) = token else {
-            return Err(ParseError::Expected {
+            return self.ectx.fatal(ParseError::Expected {
                 expected: "an identifier".into(),
                 got: token.to_string(),
                 span: name_span,
-            });
+            }, self.source());
         };
 
         Ok(Ident { string: name }.with_span(self.spans.store(name_span)))
     }
 
-    fn paren(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn paren(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
         let start_span = self.accept_required(Token::RoundLeft)?;
 
         if let Some(end_span) = self.accept_optional(Token::RoundRight)? {

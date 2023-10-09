@@ -4,8 +4,9 @@ use crate::parser::ast::{
 use crate::parser::span::Spanned;
 use crate::parser::Parser;
 use crate::source_file::SourceFile;
-use crate::lexer::TokenStream;
-use crate::token_preprocessor::PreprocessedTokens;
+use crate::lexer::token_stream::TokenStream;
+use crate::lexer::token_buffer::TokenBuffer;
+use crate::error::ErrorContext;
 use bumpalo::Bump;
 
 macro_rules! assert_matches {
@@ -20,12 +21,16 @@ macro_rules! assert_matches {
 macro_rules! assert_expr_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
+        let mut ectx = ErrorContext::new();
+
         let source = SourceFile::new($source, "test.lc");
         let token_stream = TokenStream::from_source(source);
-        let preprocessed = PreprocessedTokens::from_token_stream(token_stream).unwrap();
+        let preprocessed = TokenBuffer::from_token_stream(token_stream, &mut ectx).unwrap();
 
-        let mut p = Parser::new(preprocessed, &arena);
+        let mut p = Parser::new(preprocessed, &arena, &mut ectx);
         let e = p.expr().unwrap();
+
+        let e = ectx.finish_compile_make_recoverable_fatal(e).unwrap();
         assert_matches!(e, $pattern $(if $guard)?)
     }
 }
@@ -33,13 +38,15 @@ macro_rules! assert_expr_matches {
 macro_rules! assert_file_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
+        let mut ectx = ErrorContext::new();
         let source = SourceFile::new($source, "test.lc");
         let token_stream = TokenStream::from_source(source);
-        let preprocessed = PreprocessedTokens::from_token_stream(token_stream).unwrap();
+        let preprocessed = TokenBuffer::from_token_stream(token_stream, &mut ectx).unwrap();
 
-        let mut p = Parser::new(preprocessed, &arena);
+        let mut p = Parser::new(preprocessed, &arena, &mut ectx);
 
         let e = p.file().unwrap();
+        let e = ectx.finish_compile_make_recoverable_fatal(e).unwrap();
         assert_matches!(e, $pattern $(if $guard)?)
     }
 }
