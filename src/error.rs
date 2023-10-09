@@ -6,6 +6,7 @@ use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::source_file::SourceFile;
 
+/// Determines how many recoverable errors may occur until errors are fatal anyway.
 pub const MAX_RECOVERABLE: usize = 10;
 
 pub type CompilerResult<'s, T, E> = Result<T, CompilerError<'s, E>>;
@@ -21,6 +22,7 @@ pub trait CompilerResultExt<'s, T, E>
 impl<'s, T, E> CompilerResultExt<'s, T, E> for CompilerResult<'s, T, E>
     where E: Into<CompilerErrorKind>
 {
+    /// Converts any `Result<_, CompilerError<A>>` to a `Result<_, CompilerError<B>>` when `A` can be converted into `B`.
     fn map_into<X>(self) -> Result<T, CompilerError<'s, X>>
         where E: Into<X>, X: Into<CompilerErrorKind>
     {
@@ -30,6 +32,7 @@ impl<'s, T, E> CompilerResultExt<'s, T, E> for CompilerResult<'s, T, E>
         })
     }
 
+    /// Makes a result of any lower level error type into a result of [`CompilerErrorKind`](CompilerErrorKind)
     fn map_make_generic(self) -> Result<T, CompilerError<'s, CompilerErrorKind>> {
         self.map_err(|e| e.make_generic())
     }
@@ -38,6 +41,7 @@ impl<'s, T, E> CompilerResultExt<'s, T, E> for CompilerResult<'s, T, E>
 pub trait ResultExt<T, E>
     where E: Into<CompilerErrorKind>
 {
+    /// maps any Result to a fatal error in the error context. Nice for chaining `map_err()` calls, but often less useful than [`map_err_fatal`](ErrorContext::fatal)
     fn map_err_fatal<'s>(self, ectx: &mut ErrorContext<'s>, source: SourceFile<'s>) -> Result<T, CompilerError<'s, E>>;
 }
 
@@ -52,6 +56,8 @@ impl<T, E> ResultExt<T, E> for Result<T, E>
     }
 }
 
+/// The toplevel compiler error enum. This is what all errors finally turn in to, usually
+/// with transparent wrappers to an actual Diagnostic.
 #[derive(Diagnostic, Error, Debug, Clone)]
 pub enum CompilerErrorKind {
     #[error(transparent)]
@@ -97,6 +103,7 @@ impl<'s, E> Debug for CompilerError<'s, E>
     }
 }
 
+/// Holds the current compiler state of recoverable errors until a fatal error is thrown.
 pub struct ErrorContext<'s> {
     errors: Vec<(CompilerErrorKind, SourceFile<'s>)>
 }
@@ -108,6 +115,10 @@ impl<'s> ErrorContext<'s> {
         }
     }
 
+    /// Used after compilation. Even recoverable errors are errors, not warnings.
+    /// Therefore, after all compiler stages have passed, this should be called.
+    /// Since most errors are fatal, this method almost never actually returns `Err()`.
+    /// Either one error was fatal somewhere down the compiler line, or compilation went well.
     pub fn finish_compile_make_recoverable_fatal<T>(mut self, v: T) -> Result<T, CompilerError<'s, CompilerErrorKind>> {
         if let Some(i) = self.errors.pop() {
             // make the last error the fatal error. All other errors are just "nice to have"
@@ -117,13 +128,15 @@ impl<'s> ErrorContext<'s> {
         }
     }
 
+    /// Registering a fatal error always returns `Err()` immediately, but also displays all the recoverable errors
+    /// registered before it.
     pub fn fatal<T, E>(&mut self, error: E, source: SourceFile<'s>) -> Result<T, CompilerError<'s, E>>
         where E: Into<CompilerErrorKind>
     {
         Err(CompilerError(mem::take(&mut self.errors), (error, source)))
     }
 
-    /// Registering a recoverable may or may not return Err() based on how many errors
+    /// Registering a recoverable may or may not return `Err()` based on how many errors
     /// have been registered previously. After the number of previously registered errors
     /// exceeds [MAX_RECOVERABLE](MAX_RECOVERABLE), a registered recoverable error becomes
     /// fatal.
