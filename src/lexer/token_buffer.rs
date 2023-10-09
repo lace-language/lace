@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
+use miette::Diagnostic;
 use thiserror::Error;
-use crate::error::{ErrorContext, ResultExt};
+use crate::error::{CompilerErrorKind, CompilerResult, CompilerResultExt, ErrorContext, ResultExt};
 use crate::lexer::error::{LexError, LexResult};
 use crate::lexer::token::Token;
 use crate::lexer::token_stream::TokenStream;
@@ -12,7 +13,6 @@ pub enum BracketType {
     Round,
     Curly,
     Square,
-    Angle,
 }
 
 impl BracketType {
@@ -21,7 +21,6 @@ impl BracketType {
             BracketType::Round => Token::RoundRight,
             BracketType::Curly => Token::CurlyRight,
             BracketType::Square => Token::SquareRight,
-            BracketType::Angle => Token::AngleRight,
         }
     }
 
@@ -30,7 +29,6 @@ impl BracketType {
             BracketType::Round => ')',
             BracketType::Curly => '}',
             BracketType::Square => ']',
-            BracketType::Angle => '>'
         }
     }
 
@@ -39,66 +37,80 @@ impl BracketType {
             BracketType::Round => '(',
             BracketType::Curly => '{',
             BracketType::Square => '[',
-            BracketType::Angle => '<'
         }
     }
 }
 
-#[derive(Debug, Error)]
+pub type BracketResult<'s, T> = CompilerResult<'s, T, BracketError>;
+
+#[derive(Debug, Error, Diagnostic, Clone)]
 pub enum BracketError {
-    #[error("closing {} found without previous opening bracket of the same type", close_type.closing())]
+    #[error("closing {} found without previous opening {}", close_type.closing(), close_type.opening())]
     CloseWithoutOpen {
         close_type: BracketType,
-        close_span: Span
+        #[label("closing here")]
+        close_span: Span,
     },
-    #[error("closing {} inserted to match previous opening {} while parsing {}", close_type.closing(), close_type.opening(), expected_close_type.closing())]
+    #[error("closing {} inserted to match previous opening {} while parsing {}", open_type.closing(), open_type.opening(), expected_close_type.closing())]
     ClosingInserted {
-        close_type: BracketType,
+        open_type: BracketType,
+        #[label("opened here")]
         open_span: Span,
         expected_close_type: BracketType,
+        #[label("expected close before this token")]
         expected_close_span: Span,
+    },
+}
+
+impl Into<CompilerErrorKind> for BracketError {
+    fn into(self) -> CompilerErrorKind {
+        LexError::from(self).into()
     }
 }
 
-pub struct TokenBufferWriter<'s> {
+
+pub struct TokenBufferWriter<'s, 'e> {
     tokens: VecDeque<(Token<'s>, Span)>,
     brackets_stack: Vec<(BracketType, Span)>,
-    bracket_errors: Vec<BracketError>,
+    ectx: &'e mut ErrorContext<'s>,
+    source: SourceFile<'s>,
 }
 
-impl<'s> TokenBufferWriter<'s> {
-    pub fn new() -> Self {
+impl<'s, 'e> TokenBufferWriter<'s, 'e> {
+    pub fn new(ectx: &'e mut ErrorContext<'s>, source: SourceFile<'s>) -> Self {
         Self {
             tokens: VecDeque::new(),
             brackets_stack: Vec::new(),
-            bracket_errors: vec![],
+            ectx,
+            source,
         }
     }
 
-    fn insert_until_correct(&mut self, close_type: BracketType, close_span: Span) {
+    fn insert_until_correct(&mut self, close_type: BracketType, close_span: Span) -> BracketResult<'s, ()> {
         while let Some((open_type, open_span)) = self.brackets_stack.pop() {
             if open_type == close_type {
-                return;
+                return Ok(());
             }
 
             // TODO: should be *no span*, not the open span, but there's currently no way to represent that.
             self.tokens.push_back((open_type.closing_token(), open_span));
 
-            self.bracket_errors.push(BracketError::ClosingInserted {
-                close_type,
+            self.ectx.recoverable(BracketError::ClosingInserted {
+                open_type,
                 open_span,
                 expected_close_type: close_type,
                 expected_close_span: close_span,
-            })
+            }, self.source)?;
         }
 
-        self.bracket_errors.push(BracketError::CloseWithoutOpen {
+        self.ectx.fatal(BracketError::CloseWithoutOpen {
             close_type,
             close_span,
-        })
+        }, self.source)?;
+        Ok(())
     }
 
-    fn process_bracket(&mut self, token: Token<'s>, span: Span) {
+    fn process_bracket(&mut self, token: Token<'s>, span: Span) -> BracketResult<'s, ()> {
         match token {
             Token::RoundLeft => {
                 self.brackets_stack.push((BracketType::Round, span));
@@ -109,31 +121,29 @@ impl<'s> TokenBufferWriter<'s> {
             Token::SquareLeft => {
                 self.brackets_stack.push((BracketType::Square, span));
             }
-            Token::AngleLeft => {
-                self.brackets_stack.push((BracketType::Angle, span));
-            }
             Token::RoundRight => {
-                self.insert_until_correct(BracketType::Round, span);
+                self.insert_until_correct(BracketType::Round, span)?;
             }
             Token::CurlyRight => {
-                self.insert_until_correct(BracketType::Curly, span);
+                self.insert_until_correct(BracketType::Curly, span)?;
             }
             Token::SquareRight => {
-                self.insert_until_correct(BracketType::Square, span);
+                self.insert_until_correct(BracketType::Square, span)?;
             }
-            Token::AngleRight => {
-                self.insert_until_correct(BracketType::Square, span);
-            }
-            _ => {/* not important */}
+            _ => { /* not important */ }
         }
+
+        Ok(())
     }
 
-    fn process_token(&mut self, token: Token<'s>, span: Span) {
-        self.process_bracket(token, span);
-        self.tokens.push_back((token, span))
+    fn process_token(&mut self, token: Token<'s>, span: Span) -> LexResult<'s, ()> {
+        self.process_bracket(token, span).map_into()?;
+        self.tokens.push_back((token, span));
+
+        Ok(())
     }
 
-    pub fn process_tokens(mut self, token_stream: TokenStream<'s>, ectx: &mut ErrorContext<'s>) -> LexResult<'s, TokenBuffer<'s>> {
+    pub fn process_tokens(mut self, token_stream: TokenStream<'s>) -> LexResult<'s, TokenBuffer<'s>> {
         let source = token_stream.source;
 
         for (token, span) in token_stream {
@@ -141,8 +151,8 @@ impl<'s> TokenBufferWriter<'s> {
                 LexError::UnrecognizedToken {
                     span,
                 }
-            }).map_err_fatal(ectx, source)?;
-            self.process_token(token, span);
+            }).map_err_fatal(self.ectx, source)?;
+            self.process_token(token, span)?;
         }
 
         Ok(TokenBuffer {
@@ -161,8 +171,8 @@ pub struct TokenBuffer<'s> {
 
 impl<'s> TokenBuffer<'s> {
     pub fn from_token_stream(token_stream: TokenStream<'s>, ectx: &mut ErrorContext<'s>) -> LexResult<'s, Self> {
-        let writer = TokenBufferWriter::new();
-        writer.process_tokens(token_stream, ectx)
+        let writer = TokenBufferWriter::new(ectx, token_stream.source);
+        writer.process_tokens(token_stream)
     }
 
     pub fn next(&mut self) -> Option<(Token<'s>, Span)> {

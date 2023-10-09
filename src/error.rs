@@ -13,12 +13,23 @@ pub type CompilerResult<'s, T, E> = Result<T, CompilerError<'s, E>>;
 pub trait CompilerResultExt<'s, T, E>
     where E: Into<CompilerErrorKind>
 {
+    fn map_into<X>(self) -> Result<T, CompilerError<'s, X>> where E: Into<X>, X: Into<CompilerErrorKind>;
+
     fn map_make_generic(self) -> Result<T, CompilerError<'s, CompilerErrorKind>>;
 }
 
 impl<'s, T, E> CompilerResultExt<'s, T, E> for CompilerResult<'s, T, E>
     where E: Into<CompilerErrorKind>
 {
+    fn map_into<X>(self) -> Result<T, CompilerError<'s, X>>
+        where E: Into<X>, X: Into<CompilerErrorKind>
+    {
+        self.map_err(|e| {
+            let CompilerError(errs, fatal) = e;
+            CompilerError(errs, (fatal.0.into(), fatal.1))
+        })
+    }
+
     fn map_make_generic(self) -> Result<T, CompilerError<'s, CompilerErrorKind>> {
         self.map_err(|e| e.make_generic())
     }
@@ -117,7 +128,7 @@ impl<'s> ErrorContext<'s> {
     /// have been registered previously. After the number of previously registered errors
     /// exceeds [MAX_RECOVERABLE](MAX_RECOVERABLE), a registered recoverable error becomes
     /// fatal.
-    pub fn recoverable<E>(&mut self, error: E, source: SourceFile<'s>) -> Result<(), CompilerError<E>>
+    pub fn recoverable<E>(&mut self, error: E, source: SourceFile<'s>) -> Result<(), CompilerError<'s, E>>
         where E: Into<CompilerErrorKind>
     {
         if self.errors.len() > MAX_RECOVERABLE {
