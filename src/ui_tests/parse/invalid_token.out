@@ -1,0 +1,6 @@
+  × Unrecognized token
+   ╭─[parse/invalid_token.lc:1:1]
+ 1 │ `
+   · ┬
+   · ╰── unrecognized token
+   ╰────
