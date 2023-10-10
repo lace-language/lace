@@ -1,12 +1,12 @@
+use crate::error::ErrorContext;
+use crate::lexer::token_buffer::TokenBuffer;
+use crate::lexer::token_stream::TokenStream;
 use crate::parser::ast::{
     Block, ExprKind, File, Function, Ident, Item, Lit, Parameter, Statement, TypeSpec,
 };
 use crate::parser::span::Spanned;
 use crate::parser::Parser;
 use crate::source_file::SourceFile;
-use crate::lexer::token_stream::TokenStream;
-use crate::lexer::token_buffer::TokenBuffer;
-use crate::error::ErrorContext;
 use bumpalo::Bump;
 
 macro_rules! assert_matches {

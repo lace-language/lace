@@ -1,11 +1,11 @@
+use crate::error::{ErrorContext, ResultExt};
 use crate::lexer::token::Token;
+use crate::lexer::token_buffer::TokenBuffer;
 use crate::parser::ast::File;
 use crate::parser::span::{Span, Spans};
+use crate::source_file::SourceFile;
 use bumpalo::Bump;
 use error::{ParseError, ParseResult};
-use crate::error::{ErrorContext, ResultExt};
-use crate::lexer::token_buffer::TokenBuffer;
-use crate::source_file::SourceFile;
 
 #[macro_use]
 pub mod tok;
@@ -25,11 +25,15 @@ pub struct Parser<'s, 'a, 'e> {
     token_buffer: TokenBuffer<'s>,
     spans: Spans,
     arena: &'a Bump,
-    ectx: &'e mut ErrorContext<'s>
+    ectx: &'e mut ErrorContext<'s>,
 }
 
 impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
-    pub fn new(token_buffer: TokenBuffer<'s>, arena: &'a Bump, ectx: &'e mut ErrorContext<'s>) -> Self {
+    pub fn new(
+        token_buffer: TokenBuffer<'s>,
+        arena: &'a Bump,
+        ectx: &'e mut ErrorContext<'s>,
+    ) -> Self {
         Self {
             token_buffer,
             spans: Spans::new(),
@@ -43,7 +47,8 @@ impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
     }
 
     fn next(&mut self) -> ParseResult<'s, (Token<'s>, Span)> {
-        self.token_buffer.next()
+        self.token_buffer
+            .next()
             .ok_or(ParseError::EndOfInput)
             .map_err_fatal(self.ectx, self.source())
     }
@@ -85,11 +90,14 @@ impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
         if next == token {
             Ok(span)
         } else {
-            self.ectx.fatal(ParseError::Expected {
-                expected: token.to_string(),
-                got: next.to_string(),
-                span,
-            }, self.source())
+            self.ectx.fatal(
+                ParseError::Expected {
+                    expected: token.to_string(),
+                    got: next.to_string(),
+                    span,
+                },
+                self.source(),
+            )
         }
     }
 }

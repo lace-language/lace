@@ -1,5 +1,5 @@
-use std::fmt::Display;
 use logos::Logos;
+use std::fmt::Display;
 
 #[derive(Logos, Clone, Copy, Debug, PartialEq)]
 #[logos(skip r"[ \t\n\f]+")]

@@ -185,11 +185,14 @@ impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
             Token::String(s) => ExprKind::Lit(Lit::String(s)).with_span(span),
             Token::Int(i) => ExprKind::Lit(Lit::Int(i)).with_span(span),
             t => {
-                return self.ectx.fatal(ParseError::Expected {
-                    expected: "an expression".into(),
-                    got: t.to_string(),
-                    span: raw_span,
-                }, self.source())
+                return self.ectx.fatal(
+                    ParseError::Expected {
+                        expected: "an expression".into(),
+                        got: t.to_string(),
+                        span: raw_span,
+                    },
+                    self.source(),
+                )
             }
         };
 
@@ -199,11 +202,14 @@ impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
     pub(super) fn ident(&mut self) -> ParseResult<'s, Spanned<Ident<'s>>> {
         let (token, name_span) = self.next()?;
         let Token::Ident(name) = token else {
-            return self.ectx.fatal(ParseError::Expected {
-                expected: "an identifier".into(),
-                got: token.to_string(),
-                span: name_span,
-            }, self.source());
+            return self.ectx.fatal(
+                ParseError::Expected {
+                    expected: "an identifier".into(),
+                    got: token.to_string(),
+                    span: name_span,
+                },
+                self.source(),
+            );
         };
 
         Ok(Ident { string: name }.with_span(self.spans.store(name_span)))

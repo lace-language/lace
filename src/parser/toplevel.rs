@@ -1,7 +1,7 @@
+use crate::lexer::token::Token;
 use crate::parser::ast::{File, Item};
 use crate::parser::error::{ParseError, ParseResult};
 use crate::parser::Parser;
-use crate::lexer::token::Token;
 use bumpalo::collections::Vec;
 
 impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
@@ -22,11 +22,14 @@ impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
             Ok(Item::Function(self.parse_function()?))
         } else {
             let (token, span) = self.next()?;
-            self.ectx.fatal(ParseError::Expected {
-                expected: "an item, such as a function".into(),
-                got: token.to_string(),
-                span,
-            }, self.source())
+            self.ectx.fatal(
+                ParseError::Expected {
+                    expected: "an item, such as a function".into(),
+                    got: token.to_string(),
+                    span,
+                },
+                self.source(),
+            )
         }
     }
 }

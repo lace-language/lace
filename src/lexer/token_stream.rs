@@ -1,7 +1,7 @@
-use logos::SpannedIter;
 use crate::lexer::token::Token;
 use crate::parser::span::Span;
 use crate::source_file::SourceFile;
+use logos::SpannedIter;
 
 pub struct TokenStream<'s> {
     lexer: SpannedIter<'s, Token<'s>>,
@@ -12,7 +12,7 @@ impl<'s> TokenStream<'s> {
     pub fn from_source(source: SourceFile<'s>) -> Self {
         Self {
             lexer: logos::Lexer::new(source.contents).spanned(),
-            source
+            source,
         }
     }
 }

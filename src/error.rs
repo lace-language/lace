@@ -1,10 +1,10 @@
-use std::fmt::{Debug, Formatter};
-use std::mem;
-use miette::Diagnostic;
-use thiserror::Error;
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::source_file::SourceFile;
+use miette::Diagnostic;
+use std::fmt::{Debug, Formatter};
+use std::mem;
+use thiserror::Error;
 
 /// Determines how many recoverable errors may occur until errors are fatal anyway.
 pub const MAX_RECOVERABLE: usize = 10;
@@ -12,25 +12,35 @@ pub const MAX_RECOVERABLE: usize = 10;
 pub type CompilerResult<'s, T, E> = Result<T, CompilerError<'s, E>>;
 
 pub trait CompilerResultExt<'s, T, E>
-    where E: Into<CompilerErrorKind>
+where
+    E: Into<CompilerErrorKind>,
 {
-    fn map_into<X>(self) -> Result<T, CompilerError<'s, X>> where E: Into<X>, X: Into<CompilerErrorKind>;
+    fn map_into<X>(self) -> Result<T, CompilerError<'s, X>>
+    where
+        E: Into<X>,
+        X: Into<CompilerErrorKind>;
 
     fn map_make_generic(self) -> Result<T, CompilerError<'s, CompilerErrorKind>>;
 }
 
 impl<'s, T, E> CompilerResultExt<'s, T, E> for CompilerResult<'s, T, E>
-    where E: Into<CompilerErrorKind>
+where
+    E: Into<CompilerErrorKind>,
 {
     /// Converts any `Result<_, CompilerError<A>>` to a `Result<_, CompilerError<B>>` when `A` can be converted into `B`.
     fn map_into<X>(self) -> Result<T, CompilerError<'s, X>>
-        where E: Into<X>, X: Into<CompilerErrorKind>
+    where
+        E: Into<X>,
+        X: Into<CompilerErrorKind>,
     {
         self.map_err(|e| {
-            let CompilerError { related: errs, fatal: fatal } = e;
+            let CompilerError {
+                related: errs,
+                fatal,
+            } = e;
             CompilerError {
                 related: errs,
-                fatal: (fatal.0.into(), fatal.1)
+                fatal: (fatal.0.into(), fatal.1),
             }
         })
     }
@@ -42,26 +52,36 @@ impl<'s, T, E> CompilerResultExt<'s, T, E> for CompilerResult<'s, T, E>
 }
 
 pub trait ResultExt<T, E>
-    where E: Into<CompilerErrorKind>
+where
+    E: Into<CompilerErrorKind>,
 {
     /// maps any Result to a fatal error in the error context. Nice for chaining `map_err()` calls, but often less useful than [`map_err_fatal`](ErrorContext::fatal)
-    fn map_err_fatal<'s>(self, ectx: &mut ErrorContext<'s>, source: SourceFile<'s>) -> Result<T, CompilerError<'s, E>>;
+    fn map_err_fatal<'s>(
+        self,
+        ectx: &mut ErrorContext<'s>,
+        source: SourceFile<'s>,
+    ) -> Result<T, CompilerError<'s, E>>;
 }
 
 impl<T, E> ResultExt<T, E> for Result<T, E>
-    where E: Into<CompilerErrorKind>
+where
+    E: Into<CompilerErrorKind>,
 {
-    fn map_err_fatal<'s>(self, ectx: &mut ErrorContext<'s>, source: SourceFile<'s>) -> Result<T, CompilerError<'s, E>>{
+    fn map_err_fatal<'s>(
+        self,
+        ectx: &mut ErrorContext<'s>,
+        source: SourceFile<'s>,
+    ) -> Result<T, CompilerError<'s, E>> {
         match self {
             Ok(i) => Ok(i),
-            Err(e) => ectx.fatal(e, source)?
+            Err(e) => ectx.fatal(e, source)?,
         }
     }
 }
 
 /// The toplevel compiler error enum. This is what all errors finally turn in to, usually
 /// with transparent wrappers to an actual Diagnostic.
-#[derive(Diagnostic, Error, Debug, Clone)]
+#[derive(Diagnostic, Error, Debug, Clone, PartialEq)]
 pub enum CompilerErrorKind {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -69,7 +89,7 @@ pub enum CompilerErrorKind {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Parse(#[from] ParseError)
+    Parse(#[from] ParseError),
 }
 
 impl CompilerErrorKind {
@@ -80,30 +100,50 @@ impl CompilerErrorKind {
 
 /// The error type returned out of most functions in the compiler.
 /// Contains a number of "recoverable errors" in the error context, and then one last which was fatal.
+#[derive(PartialEq, Clone)]
 pub struct CompilerError<'s, E: Into<CompilerErrorKind>> {
     related: Vec<(CompilerErrorKind, SourceFile<'s>)>,
     fatal: (E, SourceFile<'s>),
 }
 
 impl<'s, E> CompilerError<'s, E>
-    where E: Into<CompilerErrorKind>
+where
+    E: Into<CompilerErrorKind>,
 {
     /// Get the type of fatal error inside
+    #[allow(unused)] // used in tests
     pub fn get_fatal(&self) -> &E {
         &self.fatal.0
+    }
+
+    pub fn find_related(
+        &self,
+        f: impl Fn(&CompilerErrorKind) -> bool,
+    ) -> Option<&CompilerErrorKind> {
+        self.related.iter().map(|i| &i.0).find(|x| f(x))
+    }
+
+    #[allow(unused)] // used in tests
+    pub fn contains(&self, e: impl Into<CompilerErrorKind>) -> bool
+    where
+        E: Clone,
+    {
+        let e = e.into();
+        self.find_related(|x| x == &e).is_some() || self.fatal.0.clone().into() == e
     }
 
     /// Turns a generic error of any `E` into an error of [CompilerErrorKind](CompilerErrorKind)
     pub fn make_generic(self) -> CompilerError<'s, CompilerErrorKind> {
         CompilerError {
             related: self.related,
-            fatal: (self.fatal.0.into(), self.fatal.1)
+            fatal: (self.fatal.0.into(), self.fatal.1),
         }
     }
 }
 
 impl<'s, E> Debug for CompilerError<'s, E>
-    where E: Into<CompilerErrorKind> + Diagnostic + Clone
+where
+    E: Into<CompilerErrorKind> + Diagnostic + Clone,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for (e, source) in &self.related {
@@ -131,6 +171,7 @@ impl<'s> ErrorContext<'s> {
     }
 
     /// Make an error context where all errors are fatal
+    #[allow(unused)] // used in tests
     pub fn always_fatal() -> Self {
         Self {
             errors: vec![],
@@ -142,12 +183,15 @@ impl<'s> ErrorContext<'s> {
     /// Therefore, after all compiler stages have passed, this should be called.
     /// Since most errors are fatal, this method almost never actually returns `Err()`.
     /// Either one error was fatal somewhere down the compiler line, or compilation went well.
-    pub fn finish_compile_make_recoverable_fatal<T>(mut self, v: T) -> Result<T, CompilerError<'s, CompilerErrorKind>> {
+    pub fn finish_compile_make_recoverable_fatal<T>(
+        mut self,
+        v: T,
+    ) -> Result<T, CompilerError<'s, CompilerErrorKind>> {
         if let Some(i) = self.errors.pop() {
             // make the last error the fatal error. All other errors are just "nice to have"
             Err(CompilerError {
                 related: mem::take(&mut self.errors),
-                fatal: i
+                fatal: i,
             })
         } else {
             Ok(v)
@@ -156,12 +200,17 @@ impl<'s> ErrorContext<'s> {
 
     /// Registering a fatal error always returns `Err()` immediately, but also displays all the recoverable errors
     /// registered before it.
-    pub fn fatal<T, E>(&mut self, error: E, source: SourceFile<'s>) -> Result<T, CompilerError<'s, E>>
-        where E: Into<CompilerErrorKind>
+    pub fn fatal<T, E>(
+        &mut self,
+        error: E,
+        source: SourceFile<'s>,
+    ) -> Result<T, CompilerError<'s, E>>
+    where
+        E: Into<CompilerErrorKind>,
     {
         Err(CompilerError {
             related: mem::take(&mut self.errors),
-            fatal: (error, source)
+            fatal: (error, source),
         })
     }
 
@@ -169,13 +218,18 @@ impl<'s> ErrorContext<'s> {
     /// have been registered previously. After the number of previously registered errors
     /// exceeds [MAX_RECOVERABLE](MAX_RECOVERABLE), a registered recoverable error becomes
     /// fatal.
-    pub fn recoverable<E>(&mut self, error: E, source: SourceFile<'s>) -> Result<(), CompilerError<'s, E>>
-        where E: Into<CompilerErrorKind>
+    pub fn recoverable<E>(
+        &mut self,
+        error: E,
+        source: SourceFile<'s>,
+    ) -> Result<(), CompilerError<'s, E>>
+    where
+        E: Into<CompilerErrorKind>,
     {
         if self.errors.len() > MAX_RECOVERABLE || self.always_fatal {
             Err(CompilerError {
                 related: mem::take(&mut self.errors),
-                fatal: (error, source)
+                fatal: (error, source),
             })
         } else {
             self.errors.push((error.into(), source));

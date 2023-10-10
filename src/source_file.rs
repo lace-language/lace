@@ -1,6 +1,6 @@
 use miette::NamedSource;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct SourceFile<'s> {
     pub contents: &'s str,
     pub filename: &'s str,
@@ -8,10 +8,7 @@ pub struct SourceFile<'s> {
 
 impl<'s> SourceFile<'s> {
     pub fn new(contents: &'s str, filename: &'s str) -> Self {
-        Self {
-            contents,
-            filename,
-        }
+        Self { contents, filename }
     }
 
     pub fn named_source(&self) -> NamedSource {
