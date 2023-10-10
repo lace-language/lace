@@ -27,8 +27,11 @@ impl<'s, T, E> CompilerResultExt<'s, T, E> for CompilerResult<'s, T, E>
         where E: Into<X>, X: Into<CompilerErrorKind>
     {
         self.map_err(|e| {
-            let CompilerError(errs, fatal) = e;
-            CompilerError(errs, (fatal.0.into(), fatal.1))
+            let CompilerError { related: errs, fatal: fatal } = e;
+            CompilerError {
+                related: errs,
+                fatal: (fatal.0.into(), fatal.1)
+            }
         })
     }
 
@@ -77,16 +80,25 @@ impl CompilerErrorKind {
 
 /// The error type returned out of most functions in the compiler.
 /// Contains a number of "recoverable errors" in the error context, and then one last which was fatal.
-pub struct CompilerError<'s, E: Into<CompilerErrorKind>>(Vec<(CompilerErrorKind, SourceFile<'s>)>, (E, SourceFile<'s>));
+pub struct CompilerError<'s, E: Into<CompilerErrorKind>> {
+    related: Vec<(CompilerErrorKind, SourceFile<'s>)>,
+    fatal: (E, SourceFile<'s>),
+}
+
 impl<'s, E> CompilerError<'s, E>
     where E: Into<CompilerErrorKind>
 {
+    /// Get the type of fatal error inside
     pub fn get_fatal(&self) -> &E {
-        &self.1.0
+        &self.fatal.0
     }
 
+    /// Turns a generic error of any `E` into an error of [CompilerErrorKind](CompilerErrorKind)
     pub fn make_generic(self) -> CompilerError<'s, CompilerErrorKind> {
-        CompilerError(self.0, (self.1.0.into(), self.1.1))
+        CompilerError {
+            related: self.related,
+            fatal: (self.fatal.0.into(), self.fatal.1)
+        }
     }
 }
 
@@ -94,24 +106,35 @@ impl<'s, E> Debug for CompilerError<'s, E>
     where E: Into<CompilerErrorKind> + Diagnostic + Clone
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for (e, source) in &self.0 {
+        for (e, source) in &self.related {
             writeln!(f, "{:?}", e.clone().to_miette(source))?;
         }
 
-        let (e, source) = &self.1;
+        let (e, source) = &self.fatal;
         write!(f, "{:?}", e.clone().into().to_miette(source))
     }
 }
 
 /// Holds the current compiler state of recoverable errors until a fatal error is thrown.
 pub struct ErrorContext<'s> {
-    errors: Vec<(CompilerErrorKind, SourceFile<'s>)>
+    errors: Vec<(CompilerErrorKind, SourceFile<'s>)>,
+    always_fatal: bool,
 }
 
 impl<'s> ErrorContext<'s> {
+    /// Make an error context where recoverable errors can be handled
     pub fn new() -> Self {
         Self {
             errors: vec![],
+            always_fatal: false,
+        }
+    }
+
+    /// Make an error context where all errors are fatal
+    pub fn always_fatal() -> Self {
+        Self {
+            errors: vec![],
+            always_fatal: true,
         }
     }
 
@@ -122,7 +145,10 @@ impl<'s> ErrorContext<'s> {
     pub fn finish_compile_make_recoverable_fatal<T>(mut self, v: T) -> Result<T, CompilerError<'s, CompilerErrorKind>> {
         if let Some(i) = self.errors.pop() {
             // make the last error the fatal error. All other errors are just "nice to have"
-            Err(CompilerError(mem::take(&mut self.errors), i))
+            Err(CompilerError {
+                related: mem::take(&mut self.errors),
+                fatal: i
+            })
         } else {
             Ok(v)
         }
@@ -133,7 +159,10 @@ impl<'s> ErrorContext<'s> {
     pub fn fatal<T, E>(&mut self, error: E, source: SourceFile<'s>) -> Result<T, CompilerError<'s, E>>
         where E: Into<CompilerErrorKind>
     {
-        Err(CompilerError(mem::take(&mut self.errors), (error, source)))
+        Err(CompilerError {
+            related: mem::take(&mut self.errors),
+            fatal: (error, source)
+        })
     }
 
     /// Registering a recoverable may or may not return `Err()` based on how many errors
@@ -143,8 +172,11 @@ impl<'s> ErrorContext<'s> {
     pub fn recoverable<E>(&mut self, error: E, source: SourceFile<'s>) -> Result<(), CompilerError<'s, E>>
         where E: Into<CompilerErrorKind>
     {
-        if self.errors.len() > MAX_RECOVERABLE {
-            Err(CompilerError(mem::take(&mut self.errors), (error, source)))
+        if self.errors.len() > MAX_RECOVERABLE || self.always_fatal {
+            Err(CompilerError {
+                related: mem::take(&mut self.errors),
+                fatal: (error, source)
+            })
         } else {
             self.errors.push((error.into(), source));
             Ok(())
