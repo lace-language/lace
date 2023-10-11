@@ -438,7 +438,10 @@ fn strings() {
 #[test]
 fn call() {
     assert_expr_matches!("a()", call!(ident_expr!(a) => []));
-    assert_expr_matches!("a(1)(2)", call!(call!(ident_expr!(a) => [int!(1)]) => [int!(2)]));
+    assert_expr_matches!(
+        "a(1)(2)",
+        call!(call!(ident_expr!(a) => [int!(1)]) => [int!(2)])
+    );
     assert_expr_matches!("-a(1)", neg!(call!(ident_expr!(a) => [int!(1)])));
     assert_expr_matches!(
         "a(1, 2, 3)",

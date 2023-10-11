@@ -1,10 +1,10 @@
-use std::cmp::Ordering;
 use crate::lexer::Token;
 use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
-use crate::parser::span::{Spanned, WithSpan, Span};
+use crate::parser::span::{Span, Spanned, WithSpan};
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
+use std::cmp::Ordering;
 
 /// A binary operator.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -31,10 +31,9 @@ impl BinOp {
         match self {
             Self::Add | Self::Sub => Prec::AddSub,
             Self::Mul | Self::Div => Prec::MulDiv,
-            Self::IsEQ | Self::IsNE
-                | Self::IsLT | Self::IsLE
-                | Self::IsGT | Self::IsGE
-                => Prec::Compare,
+            Self::IsEQ | Self::IsNE | Self::IsLT | Self::IsLE | Self::IsGT | Self::IsGE => {
+                Prec::Compare
+            }
             Self::Con => Prec::Con,
             Self::Dis => Prec::Dis,
         }
@@ -163,10 +162,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     /// ```peg
     /// bin_expr = una_expr (bin_op bin_expr)*
     /// ```
-    fn bin_expr(
-        &mut self,
-        prev: Option<(BinOp, Span)>,
-    ) -> ParseResult<Expr<'s, 'a>> {
+    fn bin_expr(&mut self, prev: Option<(BinOp, Span)>) -> ParseResult<Expr<'s, 'a>> {
         // The expression parsed thus far.
         let mut expr = self.una_expr()?;
 
@@ -210,10 +206,12 @@ impl<'s, 'a> Parser<'s, 'a> {
         ];
 
         // Parse the actual operator.
-        let Some(rhs) = self.peek()?
-            .and_then(|token| operators.into_iter()
-                .find(|o| o.token() == token))
-            else { return Ok(None) };
+        let Some(rhs) = self
+            .peek()?
+            .and_then(|token| operators.into_iter().find(|o| o.token() == token))
+        else {
+            return Ok(None);
+        };
 
         // If there's no left-side operator, return immediately.
         let Some(lhs) = lhs else {
@@ -226,12 +224,12 @@ impl<'s, 'a> Parser<'s, 'a> {
             Some(Assoc::Right) => {
                 // `lhs` subsumes `rhs`.
                 let (_, rhs_span) = self.next()?;
-                return Ok(Some((rhs, rhs_span)));
-            },
+                Ok(Some((rhs, rhs_span)))
+            }
             Some(Assoc::Left) => {
                 // `rhs` subsumes `lhs`, so we don't parse it.
-                return Ok(None);
-            },
+                Ok(None)
+            }
             None => {
                 // The operators were incompatible.
                 let (_, rhs_span) = self.next()?;
@@ -241,7 +239,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     lhs_span: lhs.1,
                     rhs_span,
                 })
-            },
+            }
         }
     }
 
@@ -256,10 +254,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     /// ```
     fn una_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
         // Try parsing a prefix operation.
-        let prefix_ops: [(_, fn(_) -> _); 2] = [
-            (tok![-], ExprKind::Neg),
-            (tok![!], ExprKind::Not),
-        ];
+        let prefix_ops: [(_, fn(_) -> _); 2] = [(tok![-], ExprKind::Neg), (tok![!], ExprKind::Not)];
         for (token, constructor) in prefix_ops {
             if let Some(span) = self.accept_optional(token)? {
                 let inner = self.una_expr()?;
