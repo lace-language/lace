@@ -285,6 +285,7 @@ fn integers() {
 #[test]
 fn unary() {
     assert_expr_matches!("- 2", neg!(int!(2)));
+    assert_expr_matches!("- 2 + 3", add!(neg!(int!(2)), int!(3)));
 }
 
 #[test]
@@ -437,6 +438,8 @@ fn strings() {
 #[test]
 fn call() {
     assert_expr_matches!("a()", call!(ident_expr!(a) => []));
+    assert_expr_matches!("a(1)(2)", call!(call!(ident_expr!(a) => [int!(1)]) => [int!(2)]));
+    assert_expr_matches!("-a(1)", neg!(call!(ident_expr!(a) => [int!(1)])));
     assert_expr_matches!(
         "a(1, 2, 3)",
         call!(
