@@ -17,6 +17,15 @@ pub enum ParseError {
         #[label("expected {expected}")]
         span: Span,
     },
+    #[error("The chained binary operators `{lhs}` and `{rhs}` are incompatible")]
+    IncompatBinOp {
+        lhs: String,
+        rhs: String,
+        #[label("the first operator")]
+        lhs_span: Span,
+        #[label("the second operator")]
+        rhs_span: Span,
+    },
     // TODO: Figure out how to get the error from logos
     #[error("Unrecognized token")]
     UnrecognizedToken {
