@@ -151,21 +151,29 @@ pub enum Assoc {
 
 impl<'s, 'a> Parser<'s, 'a> {
     // TODO: Proper error handling
+    /// Parse an expression.
     pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        self.prec_expr(None)
+        self.bin_expr(None)
     }
 
-    fn prec_expr(
+    /// Parse a binary expression.
+    ///
+    /// # Grammar
+    ///
+    /// ```peg
+    /// bin_expr = una_expr (bin_op bin_expr)*
+    /// ```
+    fn bin_expr(
         &mut self,
         prev: Option<(BinOp, Span)>,
     ) -> ParseResult<Expr<'s, 'a>> {
         // The expression parsed thus far.
-        let mut expr = self.unary_expr()?;
+        let mut expr = self.una_expr()?;
 
         // Try extending into a larger binary operation.
-        while let Some(next) = self.binop(prev)? {
+        while let Some(next) = self.bin_op(prev)? {
             // Get the right-hand side of this operation.
-            let rhs = self.prec_expr(Some(next))?;
+            let rhs = self.bin_expr(Some(next))?;
 
             // Construct the new binary operation.
             let span = self.spans.merge(&expr, &rhs);
@@ -176,35 +184,16 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(expr)
     }
 
-    /// Determine the associativity between two binary operators.
-    fn binop(&mut self, lhs: Option<(BinOp, Span)>) -> ParseResult<Option<(BinOp, Span)>> {
-        let Some(rhs) = self.peek_binop()? else { return Ok(None) };
-        let Some(lhs) = lhs else {
-            let (_, rhs_span) = self.next()?;
-            return Ok(Some((rhs, rhs_span)));
-        };
-
-        if let Some(assoc) = Prec::cmp(lhs.0.prec(), rhs.prec()) {
-            // The operators are compatible, succeed.
-            if assoc == Assoc::Right {
-                let (_, rhs_span) = self.next()?;
-                return Ok(Some((rhs, rhs_span)));
-            } else {
-                return Ok(None);
-            }
-        }
-
-        let (_, rhs_span) = self.next()?;
-        Err(ParseError::IncompatBinOp {
-            lhs: lhs.0.token().to_string(),
-            rhs: rhs.token().to_string(),
-            lhs_span: lhs.1,
-            rhs_span,
-        })
-    }
-
-    /// Peek to find a binary operator.
-    fn peek_binop(&mut self) -> ParseResult<Option<BinOp>> {
+    /// Parse a binary operator, with precedence checking.
+    ///
+    /// # Grammar
+    ///
+    /// ```peg
+    /// bin_op = '+' | '-' | '*' | '/'
+    ///        | '==' | '!=' | '<' | '<=' | '>' | '>='
+    ///        | '&&' | '||'
+    /// ```
+    fn bin_op(&mut self, lhs: Option<(BinOp, Span)>) -> ParseResult<Option<(BinOp, Span)>> {
         let operators = [
             BinOp::Add,
             BinOp::Sub,
@@ -220,12 +209,52 @@ impl<'s, 'a> Parser<'s, 'a> {
             BinOp::Dis,
         ];
 
-        let Some(token) = self.peek()? else { return Ok(None) };
-        Ok(operators.into_iter().find(|o| o.token() == token))
+        // Parse the actual operator.
+        let Some(rhs) = self.peek()?
+            .and_then(|token| operators.into_iter()
+                .find(|o| o.token() == token))
+            else { return Ok(None) };
+
+        // If there's no left-side operator, return immediately.
+        let Some(lhs) = lhs else {
+            let (_, rhs_span) = self.next()?;
+            return Ok(Some((rhs, rhs_span)));
+        };
+
+        // Otherwise, compare the operators via precedence.
+        match Prec::cmp(lhs.0.prec(), rhs.prec()) {
+            Some(Assoc::Right) => {
+                // `lhs` subsumes `rhs`.
+                let (_, rhs_span) = self.next()?;
+                return Ok(Some((rhs, rhs_span)));
+            },
+            Some(Assoc::Left) => {
+                // `rhs` subsumes `lhs`, so we don't parse it.
+                return Ok(None);
+            },
+            None => {
+                // The operators were incompatible.
+                let (_, rhs_span) = self.next()?;
+                Err(ParseError::IncompatBinOp {
+                    lhs: lhs.0.token().to_string(),
+                    rhs: rhs.token().to_string(),
+                    lhs_span: lhs.1,
+                    rhs_span,
+                })
+            },
+        }
     }
 
     /// Parse a unary expression.
-    fn unary_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    ///
+    /// # Grammar
+    ///
+    /// ```peg
+    /// una_expr = una_op_pre* atom una_op_post*
+    /// una_op_pre = '-' | '!'
+    /// una_op_post = call_args
+    /// ```
+    fn una_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
         // Try parsing a prefix operation.
         let prefix_ops: [(_, fn(_) -> _); 2] = [
             (tok![-], ExprKind::Neg),
@@ -233,7 +262,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         ];
         for (token, constructor) in prefix_ops {
             if let Some(span) = self.accept_optional(token)? {
-                let inner = self.unary_expr()?;
+                let inner = self.una_expr()?;
                 let span = self.spans.store_merged(span, &inner);
                 let inner = self.alloc(inner);
                 return Ok((constructor)(inner).with_span(span));
