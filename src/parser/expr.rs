@@ -152,7 +152,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     // TODO: Proper error handling
     /// Parse an expression.
     pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        self.bin_expr(None)
+        self.binary_expr(None)
     }
 
     /// Parse a binary expression.
@@ -160,20 +160,21 @@ impl<'s, 'a> Parser<'s, 'a> {
     /// # Grammar
     ///
     /// ```peg
-    /// bin_expr = una_expr (bin_op bin_expr)*
+    /// binary_expr = unary_expr (binary_op binary_expr)*
     /// ```
-    fn bin_expr(&mut self, prev: Option<(BinOp, Span)>) -> ParseResult<Expr<'s, 'a>> {
+    fn binary_expr(&mut self, prev: Option<(BinOp, Span)>) -> ParseResult<Expr<'s, 'a>> {
         // The expression parsed thus far.
-        let mut expr = self.una_expr()?;
+        let mut expr = self.unary_expr()?;
 
         // Try extending into a larger binary operation.
-        while let Some(next) = self.bin_op(prev)? {
+        while let Some(next) = self.binary_op(prev)? {
             // Get the right-hand side of this operation.
-            let rhs = self.bin_expr(Some(next))?;
+            let rhs = self.binary_expr(Some(next))?;
 
             // Construct the new binary operation.
             let span = self.spans.merge(&expr, &rhs);
-            let [lhs, rhs] = [expr, rhs].map(|x| self.alloc(x));
+            let lhs = self.alloc(expr);
+            let rhs = self.alloc(rhs);
             expr = next.0.into_expr(lhs, rhs).with_span(span);
         }
 
@@ -185,11 +186,11 @@ impl<'s, 'a> Parser<'s, 'a> {
     /// # Grammar
     ///
     /// ```peg
-    /// bin_op = '+' | '-' | '*' | '/'
-    ///        | '==' | '!=' | '<' | '<=' | '>' | '>='
-    ///        | '&&' | '||'
+    /// binary_op = '+' | '-' | '*' | '/'
+    ///           | '==' | '!=' | '<' | '<=' | '>' | '>='
+    ///           | '&&' | '||'
     /// ```
-    fn bin_op(&mut self, lhs: Option<(BinOp, Span)>) -> ParseResult<Option<(BinOp, Span)>> {
+    fn binary_op(&mut self, lhs: Option<(BinOp, Span)>) -> ParseResult<Option<(BinOp, Span)>> {
         let operators = [
             BinOp::Add,
             BinOp::Sub,
@@ -248,16 +249,16 @@ impl<'s, 'a> Parser<'s, 'a> {
     /// # Grammar
     ///
     /// ```peg
-    /// una_expr = una_op_pre* atom una_op_post*
+    /// unary_expr = una_op_pre* atom una_op_post*
     /// una_op_pre = '-' | '!'
     /// una_op_post = call_args
     /// ```
-    fn una_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn unary_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
         // Try parsing a prefix operation.
         let prefix_ops: [(_, fn(_) -> _); 2] = [(tok![-], ExprKind::Neg), (tok![!], ExprKind::Not)];
         for (token, constructor) in prefix_ops {
             if let Some(span) = self.accept_optional(token)? {
-                let inner = self.una_expr()?;
+                let inner = self.unary_expr()?;
                 let span = self.spans.store_merged(span, &inner);
                 let inner = self.alloc(inner);
                 return Ok((constructor)(inner).with_span(span));
