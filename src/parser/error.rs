@@ -1,10 +1,9 @@
-use crate::error::CompilerError;
 use miette::Diagnostic;
 use thiserror::Error;
 
 use super::span::Span;
 
-pub type ParseResult<'s, T> = Result<T, CompilerError<'s, ParseError>>;
+pub type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Error, Diagnostic, Debug, Clone, PartialEq)]
 #[diagnostic()]

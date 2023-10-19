@@ -7,8 +7,8 @@ use bumpalo::collections::Vec;
 
 use super::span::Spanned;
 
-impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
-    fn let_(&mut self) -> ParseResult<'s, Statement<'s, 'a>> {
+impl<'s, 'a> Parser<'s, 'a> {
+    fn let_(&mut self) -> ParseResult<Statement<'s, 'a>> {
         self.accept_required(tok![let])?;
 
         let ident = self.ident()?;
@@ -26,7 +26,7 @@ impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
         Ok(Statement::Let(ident, type_spec, self.alloc(expr)))
     }
 
-    pub(super) fn block(&mut self) -> ParseResult<'s, Spanned<Block<'s, 'a>>> {
+    pub(super) fn block(&mut self) -> ParseResult<Spanned<Block<'s, 'a>>> {
         let start_span = self.accept_required(Token::CurlyLeft)?;
 
         let mut vec = Vec::new_in(self.arena);
@@ -71,7 +71,7 @@ impl<'s, 'a, 'e> Parser<'s, 'a, 'e> {
         }
     }
 
-    pub(super) fn if_else(&mut self) -> ParseResult<'s, Expr<'s, 'a>> {
+    pub(super) fn if_else(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let start_span = self.accept_required(tok![if])?;
 
         let expr = self.expr()?;

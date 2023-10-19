@@ -6,16 +6,12 @@ mod lexer;
 mod parser;
 mod source_file;
 
-#[cfg(test)]
-mod ui_tests;
-
-use crate::error::{CompilerErrorKind, CompilerResult, CompilerResultExt, ErrorContext};
+use crate::error::{print_error, CompilerError};
 use crate::parser::ast::Ast;
 use crate::source_file::SourceFile;
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
 use lexer::token_buffer::TokenBuffer;
-use lexer::token_stream::TokenStream;
 use parser::Parser;
 use std::process::ExitCode;
 
@@ -25,20 +21,13 @@ struct Options {
     file_name: String,
 }
 
-fn compile<'s, 'a>(
-    source: SourceFile<'s>,
-    arena: &'a Bump,
-) -> CompilerResult<'s, Ast<'s, 'a>, CompilerErrorKind> {
-    let mut ectx = ErrorContext::new();
+fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a>, CompilerError> {
+    let token_buffer = TokenBuffer::from_source(source)?;
 
-    let token_stream = TokenStream::from_source(source);
-    let token_buffer =
-        TokenBuffer::from_token_stream(token_stream, &mut ectx).map_make_generic()?;
+    let parser = Parser::new(token_buffer, arena);
+    let ast = parser.parse()?;
 
-    let parser = Parser::new(token_buffer, arena, &mut ectx);
-    let ast = parser.parse().map_make_generic()?;
-
-    ectx.finish_compile_make_recoverable_fatal(ast)
+    Ok(ast)
 }
 
 fn main() -> ExitCode {
@@ -51,7 +40,7 @@ fn main() -> ExitCode {
 
     let ast = match compile(source_file, &arena) {
         Err(e) => {
-            eprintln!("{:?}", e);
+            print_error(e, source_file);
             return ExitCode::FAILURE;
         }
         Ok(i) => i,
