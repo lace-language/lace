@@ -4,6 +4,27 @@ use crate::source_file::SourceFile;
 use miette::Diagnostic;
 use thiserror::Error;
 
+pub trait ResultExt<T> {
+    fn unwrap_miette(self, source: SourceFile) -> T
+    where
+        Self: Sized;
+}
+
+impl<T, E> ResultExt<T> for Result<T, E>
+where
+    E: Diagnostic + Clone + Send + Sync + 'static,
+{
+    fn unwrap_miette(self, source: SourceFile) -> T {
+        match self {
+            Ok(i) => i,
+            Err(e) => {
+                print_error(e, source);
+                panic!();
+            }
+        }
+    }
+}
+
 /// The toplevel compiler error enum. This is what all errors finally turn in to, usually
 /// with transparent wrappers to an actual Diagnostic.
 #[derive(Diagnostic, Error, Debug, Clone, PartialEq)]

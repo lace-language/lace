@@ -37,7 +37,6 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     // For debugging:
     graph.print();
 
-    let src: &str = source.contents.leak();
     eprintln!("resolved {}", resolved.len());
     for (from, to) in resolved {
         let report = miette::miette!(
@@ -47,7 +46,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
             ],
             "resolved"
         )
-            .with_source_code(src);
+        .with_source_code(source.named_source());
         eprintln!("{:?}", report);
     }
 

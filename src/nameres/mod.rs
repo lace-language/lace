@@ -13,6 +13,9 @@ use stack_graphs::{
     NoCancellation,
 };
 
+#[cfg(test)]
+mod tests;
+
 pub struct Graph {
     /// The stack graph for this file
     graph: StackGraph,
