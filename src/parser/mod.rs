@@ -1,10 +1,9 @@
-use crate::lexer::{Lexer, Token};
+use crate::lexer::token::Token;
+use crate::lexer::token_buffer::TokenBuffer;
 use crate::parser::ast::File;
 use crate::parser::span::{Span, Spans};
 use bumpalo::Bump;
 use error::{ParseError, ParseResult};
-use miette::NamedSource;
-use std::iter::Peekable;
 
 #[macro_use]
 pub mod tok;
@@ -21,62 +20,42 @@ pub mod type_spec;
 pub mod test;
 
 pub struct Parser<'s, 'a> {
-    file_name: &'s str,
-    source: &'s str,
-    lexer: Peekable<Lexer<'s>>,
+    token_buffer: TokenBuffer<'s>,
     spans: Spans,
     arena: &'a Bump,
 }
 
 impl<'s, 'a> Parser<'s, 'a> {
-    pub fn new(file_name: &'s str, source: &'s str, arena: &'a Bump) -> Self {
+    pub fn new(token_buffer: TokenBuffer<'s>, arena: &'a Bump) -> Self {
         Self {
-            file_name,
-            source,
-            lexer: logos::Lexer::new(source).spanned().peekable(),
+            token_buffer,
             spans: Spans::new(),
             arena,
         }
     }
 
-    pub fn parse(mut self) -> miette::Result<(Spans, File<'s, 'a>)> {
-        match self.file() {
-            Ok(f) => Ok((self.spans, f)),
-            Err(error) => {
-                let named_source = NamedSource::new(self.file_name, self.source.to_string());
-                Err(miette::Error::from(error).with_source_code(named_source))
-            }
-        }
+    fn next(&mut self) -> ParseResult<(Token<'s>, Span)> {
+        self.token_buffer.next().ok_or(ParseError::EndOfInput)
+    }
+
+    pub fn parse(mut self) -> ParseResult<(Spans, File<'s, 'a>)> {
+        Ok((self.spans, self.file()?))
     }
 
     fn alloc<T>(&mut self, x: T) -> &'a T {
         self.arena.alloc(x)
     }
 
-    fn has_next(&mut self) -> ParseResult<bool> {
-        Ok(self.peek()?.is_some())
+    fn has_next(&mut self) -> bool {
+        self.peek().is_some()
     }
 
-    fn next(&mut self) -> ParseResult<(Token<'s>, Span)> {
-        match self.lexer.next() {
-            Some((Ok(t), s)) => Ok((t, s.into())),
-            Some((Err(_), span)) => Err(ParseError::UnrecognizedToken { span: span.into() }),
-            None => Err(ParseError::EndOfInput),
-        }
-    }
-
-    fn peek(&mut self) -> ParseResult<Option<Token<'s>>> {
-        match self.lexer.peek() {
-            Some((Ok(t), _)) => Ok(Some(*t)),
-            Some((Err(_), span)) => Err(ParseError::UnrecognizedToken {
-                span: span.clone().into(),
-            }),
-            None => Ok(None),
-        }
+    fn peek(&mut self) -> Option<Token<'s>> {
+        self.token_buffer.peek().map(|(tok, _)| tok)
     }
 
     fn peek_is(&mut self, token: Token) -> ParseResult<bool> {
-        let Some(lexed_token) = self.peek()? else {
+        let Some(lexed_token) = self.peek() else {
             return Ok(false);
         };
 

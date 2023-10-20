@@ -1,4 +1,4 @@
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
 use crate::parser::span::{Spanned, WithSpan};
@@ -189,7 +189,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     expected: "an expression".into(),
                     got: t.to_string(),
                     span: raw_span,
-                })
+                });
             }
         };
 

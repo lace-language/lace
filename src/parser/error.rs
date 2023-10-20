@@ -5,7 +5,7 @@ use super::span::Span;
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Error, Diagnostic, Debug, Clone, PartialEq)]
 #[diagnostic()]
 pub enum ParseError {
     #[error("Unexpected end of input")]
@@ -15,12 +15,6 @@ pub enum ParseError {
         expected: String,
         got: String,
         #[label("expected {expected}")]
-        span: Span,
-    },
-    // TODO: Figure out how to get the error from logos
-    #[error("Unrecognized token")]
-    UnrecognizedToken {
-        #[label("unrecognized token")]
         span: Span,
     },
 }

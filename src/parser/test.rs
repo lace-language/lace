@@ -1,8 +1,11 @@
+use crate::lexer::token_buffer::TokenBuffer;
+use crate::lexer::token_stream::TokenStream;
 use crate::parser::ast::{
     Block, ExprKind, File, Function, Ident, Item, Lit, Parameter, Statement, TypeSpec,
 };
 use crate::parser::span::Spanned;
 use crate::parser::Parser;
+use crate::source_file::SourceFile;
 use bumpalo::Bump;
 
 macro_rules! assert_matches {
@@ -17,8 +20,13 @@ macro_rules! assert_matches {
 macro_rules! assert_expr_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
-        let mut p = Parser::new("test", $source, &arena);
+
+        let source = SourceFile::new($source, "test.lc");
+        let preprocessed = TokenBuffer::from_source(source).unwrap();
+
+        let mut p = Parser::new(preprocessed, &arena);
         let e = p.expr().unwrap();
+
         assert_matches!(e, $pattern $(if $guard)?)
     }
 }
@@ -26,7 +34,11 @@ macro_rules! assert_expr_matches {
 macro_rules! assert_file_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
-        let mut p = Parser::new("test", $source, &arena);
+        let source = SourceFile::new($source, "test.lc");
+        let preprocessed = TokenBuffer::from_source(source).unwrap();
+
+        let mut p = Parser::new(preprocessed, &arena);
+
         let e = p.file().unwrap();
         assert_matches!(e, $pattern $(if $guard)?)
     }

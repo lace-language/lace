@@ -1,14 +1,14 @@
+use crate::lexer::token::Token;
 use crate::parser::ast::{File, Item};
 use crate::parser::error::{ParseError, ParseResult};
 use crate::parser::Parser;
-use crate::parser::Token;
 use bumpalo::collections::Vec;
 
 impl<'s, 'a> Parser<'s, 'a> {
     pub fn file(&mut self) -> ParseResult<File<'s, 'a>> {
         let mut items = Vec::new_in(self.arena);
 
-        while self.has_next()? {
+        while self.has_next() {
             items.push(self.item()?);
         }
 

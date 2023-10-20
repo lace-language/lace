@@ -1,4 +1,4 @@
-use crate::lexer::Token;
+use crate::lexer::token::Token;
 use crate::parser::ast::{Function, Parameter};
 use crate::parser::error::ParseResult;
 use crate::parser::span::{Spanned, WithSpan};
