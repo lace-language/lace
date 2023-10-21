@@ -130,11 +130,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     // TODO: Function calls
     pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let lhs = self.unary()?;
-        let (expr, maybe_op) = self.binary_expr(lhs, None)?;
-        if maybe_op.is_some() {
-            ice!("there was an binary operator left at the lowest precedence level, which is not associative");
-        }
-        Ok(expr)
+        self.binary_expr(lhs, None)
     }
 
     fn accept_any<T>(
@@ -149,27 +145,30 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(None)
     }
 
+    fn peek_any<T>(
+        &mut self,
+        tokens: impl IntoIterator<Item = (Token<'s>, T)>,
+    ) -> ParseResult<Option<T>> {
+        for (t, op) in tokens {
+            if self.peek_is(t)? {
+                return Ok(Some(op));
+            }
+        }
+        Ok(None)
+    }
+
     fn binary_expr(
         &mut self,
         mut lhs: Expr<'s, 'a>,
         last_operator: Option<&Spanned<BinaryOp>>,
-    ) -> ParseResult<(Expr<'s, 'a>, Option<Spanned<BinaryOp>>)> {
+    ) -> ParseResult<Expr<'s, 'a>> {
         let precedence_bound = match last_operator {
             Some(last_operator) => last_operator.precedence(),
             None => Precedence::Lowest,
         };
 
-        // maybe we have an operator 'cached' already because we accidentally parsed it
-        // somewhere in the parse loop. At the start, we do not however so None.
-        let mut maybe_operator = None;
-
         loop {
-            // if we have a cached operator: take it
-            // if we don't, parse a new one!
-            // else, this is the end of the expression
-            let operator = if let Some(operator) = maybe_operator.take() {
-                operator
-            } else if let Some(operator) = self.binary_operator()? {
+            let operator = if let Some(operator) = self.peek_binary_operator()? {
                 operator
             } else {
                 break;
@@ -178,8 +177,13 @@ impl<'s, 'a> Parser<'s, 'a> {
             // now we look at the precedence and associativity of our operator,
             // and determine whether we should continue parsing more expression
             // or return back up
-            match operator.value.precedence().compatibility(&precedence_bound) {
+            match operator.precedence().compatibility(&precedence_bound) {
                 Compatibility::Continue => {
+                    // we peeked already that an operator is coming, we just need to know its span and progress the parser
+                    let (_, span) = self.next()?;
+                    let span = self.spans.store(span);
+                    let operator = operator.with_span(span);
+
                     // if we continue,
                     // parse the left hand side of the next expression
                     let new_lhs = self.unary()?;
@@ -187,8 +191,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     // left hand side. Maybe, it parses an operator too many,
                     // in that case it returns it and we cache it in `maybe_operator`
                     // and use it next if we determine we should not return it ourselves
-                    let (rhs, maybe_new_op) = self.binary_expr(new_lhs, Some(&operator))?;
-                    maybe_operator = maybe_new_op;
+                    let rhs = self.binary_expr(new_lhs, Some(&operator))?;
 
                     // make an expression, and loop
                     let span = self.spans.merge(&lhs, &rhs);
@@ -196,27 +199,30 @@ impl<'s, 'a> Parser<'s, 'a> {
                         .with_span(span);
                 }
                 Compatibility::Stop => {
-                    return Ok((lhs, Some(operator)));
+                    return Ok(lhs);
                 }
                 Compatibility::Incompatible => {
                     let last_operator = last_operator
                         .ice("we can never have incompatibility if there was no last operator");
 
+                    // we peeked already that an operator is coming, we just need to know its span
+                    let (_, span) = self.next()?;
+
                     return Err(ParseError::IncompatibleBinaryOp {
                         left_operator: last_operator.value.to_string(),
-                        right_operator: operator.value.to_string(),
+                        right_operator: operator.to_string(),
                         left_operator_span: self.spans.get(last_operator.span),
-                        right_operator_span: self.spans.get(operator.span),
+                        right_operator_span: span,
                     });
                 }
             }
         }
 
-        Ok((lhs, None))
+        Ok(lhs)
     }
 
-    fn binary_operator(&mut self) -> ParseResult<Option<Spanned<BinaryOp>>> {
-        let Some((operator, span)) = self.accept_any([
+    fn peek_binary_operator(&mut self) -> ParseResult<Option<BinaryOp>> {
+        self.peek_any([
             (tok![*], BinaryOp::Mul),
             (tok![/], BinaryOp::Div),
             (tok![+], BinaryOp::Add),
@@ -229,12 +235,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             (tok![<=], BinaryOp::Lte),
             (tok![==], BinaryOp::Eq),
             (tok![!=], BinaryOp::Neq),
-        ])?
-        else {
-            return Ok(None);
-        };
-
-        Ok(Some(operator.with_span(self.spans.store(span))))
+        ])
     }
 
     fn unary(&mut self) -> ParseResult<Expr<'s, 'a>> {
