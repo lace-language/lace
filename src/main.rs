@@ -12,8 +12,8 @@ use crate::source_file::SourceFile;
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
 use lexer::token_buffer::TokenBuffer;
-use parser::Parser;
 use miette::Report;
+use parser::Parser;
 
 #[derive(ClapParser)]
 #[command(author, version, about, long_about = None)]
@@ -34,7 +34,10 @@ fn main() -> Result<(), Report> {
     let cli = Options::parse();
     let filename = &cli.file_name;
     let contents = std::fs::read_to_string(filename).unwrap();
-    let source_file = SourceFile{contents: &contents, filename};
+    let source_file = SourceFile {
+        contents: &contents,
+        filename,
+    };
 
     let arena = Bump::new();
 

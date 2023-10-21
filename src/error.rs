@@ -18,16 +18,16 @@ pub enum CompilerError {
 }
 
 pub trait ResultExt<T> {
-    fn map_err_miette(self, source: SourceFile) -> Result<T, Report> where Self: Sized;
+    fn map_err_miette(self, source: SourceFile) -> Result<T, Report>
+    where
+        Self: Sized;
 }
 
 impl<T, E> ResultExt<T> for Result<T, E>
-    where E: Diagnostic + Clone + Send + Sync + 'static
+where
+    E: Diagnostic + Clone + Send + Sync + 'static,
 {
     fn map_err_miette(self, source: SourceFile) -> Result<T, Report> {
-        self.map_err(|e| {
-            Report::new(e).with_source_code(source.named_source())
-        })
+        self.map_err(|e| Report::new(e).with_source_code(source.named_source()))
     }
 }
-
