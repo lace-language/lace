@@ -197,7 +197,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                 }
                 Compatibility::Incompatible => {
                     let last_operator = last_operator
-                        .ice("we can never have incompatibility if there was no last operator");
+                        .unwrap_or_ice("we can never have incompatibility if there was no last operator");
 
                     // we peeked already that an operator is coming, we just need to know its span
                     let (_, span) = self.next()?;
