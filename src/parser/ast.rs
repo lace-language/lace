@@ -92,3 +92,5 @@ pub enum Item<'s, 'a> {
 pub struct File<'s, 'a> {
     pub items: &'a [Item<'s, 'a>],
 }
+
+pub type Ast<'s, 'a> = File<'s, 'a>;
