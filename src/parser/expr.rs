@@ -167,13 +167,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             None => Precedence::Lowest,
         };
 
-        loop {
-            let operator = if let Some(operator) = self.peek_binary_operator()? {
-                operator
-            } else {
-                break;
-            };
-
+        while let Some(operator) = self.peek_binary_operator()? {
             // now we look at the precedence and associativity of our operator,
             // and determine whether we should continue parsing more expression
             // or return back up
