@@ -6,14 +6,14 @@ mod lexer;
 mod parser;
 mod source_file;
 
-use crate::error::{print_error, CompilerError};
+use crate::error::{CompilerError, ResultExt};
 use crate::parser::ast::Ast;
 use crate::source_file::SourceFile;
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
 use lexer::token_buffer::TokenBuffer;
 use parser::Parser;
-use std::process::ExitCode;
+use miette::Report;
 
 #[derive(ClapParser)]
 #[command(author, version, about, long_about = None)]
@@ -30,22 +30,16 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     Ok(ast)
 }
 
-fn main() -> ExitCode {
+fn main() -> Result<(), Report> {
     let cli = Options::parse();
-    let file_name = &cli.file_name;
-    let contents = std::fs::read_to_string(file_name).unwrap();
-    let source_file = SourceFile::new(&contents, file_name);
+    let filename = &cli.file_name;
+    let contents = std::fs::read_to_string(filename).unwrap();
+    let source_file = SourceFile{contents: &contents, filename};
 
     let arena = Bump::new();
 
-    let ast = match compile(source_file, &arena) {
-        Err(e) => {
-            print_error(e, source_file);
-            return ExitCode::FAILURE;
-        }
-        Ok(i) => i,
-    };
+    let ast = compile(source_file, &arena).map_err_miette(source_file)?;
     println!("{:?}", ast);
 
-    ExitCode::SUCCESS
+    Ok(())
 }

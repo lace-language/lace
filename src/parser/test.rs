@@ -1,5 +1,4 @@
 use crate::lexer::token_buffer::TokenBuffer;
-use crate::lexer::token_stream::TokenStream;
 use crate::parser::ast::{
     Block, ExprKind, File, Function, Ident, Item, Lit, Parameter, Statement, TypeSpec,
 };
@@ -21,7 +20,7 @@ macro_rules! assert_expr_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
 
-        let source = SourceFile::new($source, "test.lc");
+        let source = SourceFile{contents: $source, filename: "test.lc"};
         let preprocessed = TokenBuffer::from_source(source).unwrap();
 
         let mut p = Parser::new(preprocessed, &arena);
@@ -34,7 +33,7 @@ macro_rules! assert_expr_matches {
 macro_rules! assert_file_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
-        let source = SourceFile::new($source, "test.lc");
+        let source = SourceFile{contents: $source, filename: "test.lc"};
         let preprocessed = TokenBuffer::from_source(source).unwrap();
 
         let mut p = Parser::new(preprocessed, &arena);

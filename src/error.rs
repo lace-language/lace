@@ -1,7 +1,7 @@
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::source_file::SourceFile;
-use miette::Diagnostic;
+use miette::{Diagnostic, Report};
 use thiserror::Error;
 
 /// The toplevel compiler error enum. This is what all errors finally turn in to, usually
@@ -17,7 +17,17 @@ pub enum CompilerError {
     Parse(#[from] ParseError),
 }
 
-pub fn print_error(e: impl Diagnostic + Clone + Send + Sync + 'static, source: SourceFile) {
-    let report = miette::Report::new(e).with_source_code(source.named_source());
-    println!("{report:?}")
+pub trait ResultExt<T> {
+    fn map_err_miette(self, source: SourceFile) -> Result<T, Report> where Self: Sized;
 }
+
+impl<T, E> ResultExt<T> for Result<T, E>
+    where E: Diagnostic + Clone + Send + Sync + 'static
+{
+    fn map_err_miette(self, source: SourceFile) -> Result<T, Report> {
+        self.map_err(|e| {
+            Report::new(e).with_source_code(source.named_source())
+        })
+    }
+}
+
