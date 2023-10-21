@@ -20,7 +20,7 @@ macro_rules! assert_expr_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
 
-        let source = SourceFile::new("test.lc", $source);
+        let source = SourceFile { contents: $source, filename: "test.lc" };
         let preprocessed = TokenBuffer::from_source(source).unwrap();
 
         let mut p = Parser::new(preprocessed, &arena);
@@ -33,7 +33,7 @@ macro_rules! assert_expr_matches {
 macro_rules! assert_file_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
         let arena = Bump::new();
-        let source = SourceFile::new("test.lc", $source);
+        let source = SourceFile { contents: $source, filename: "test.lc" };
         let preprocessed = TokenBuffer::from_source(source).unwrap();
 
         let mut p = Parser::new(preprocessed, &arena);

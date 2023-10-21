@@ -9,10 +9,15 @@ use miette::LabeledSpan;
 macro_rules! parse {
     (let $pat: pat = $source: literal) => {
         let arena = Bump::new();
-        let source = SourceFile::new("test.lc", $source);
-        let token_buffer = TokenBuffer::from_source(source).unwrap_miette(source);
+        let source = SourceFile {
+            filename: "test.lc",
+            contents: $source,
+        };
+        let token_buffer = TokenBuffer::from_source(source)
+            .map_err_miette(source)
+            .unwrap();
         let parser = Parser::new(token_buffer, &arena);
-        let (spans, ast) = parser.parse().unwrap_miette(source);
+        let (spans, ast) = parser.parse().map_err_miette(source).unwrap();
         let $pat = (spans, ast, source);
     };
 }
