@@ -123,7 +123,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         let lhs = self.unary()?;
         let (expr, maybe_op) = self.binary_expr(lhs, None)?;
         if maybe_op.is_some() {
-            ice!("there was an binary operator left at the lowest precedence level");
+            ice!("there was an binary operator left at the lowest precedence level, which is not associative");
         }
         Ok(expr)
     }
@@ -167,7 +167,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             };
 
             // now we look at the precedence and associativity of our operator,
-            // and determine wether we should continue parsing more expression
+            // and determine whether we should continue parsing more expression
             // or return back up
             match operator.value.precedence().compatibility(&precedence_bound) {
                 Compatibility::Continue => {
