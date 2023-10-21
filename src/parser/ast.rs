@@ -1,4 +1,5 @@
 use crate::parser::span::Spanned;
+use derive_more::Display;
 
 pub type Expr<'s, 'a> = Spanned<ExprKind<'s, 'a>>;
 
@@ -14,25 +15,37 @@ pub enum ExprKind<'s, 'a> {
     Block(&'a Spanned<Block<'s, 'a>>),
     Ident(Ident<'s>),
     Paren(&'a Spanned<Self>),
-    BinOp(BinOp, &'a Spanned<Self>, &'a Spanned<Self>),
-    UnaryOp(UnaryOp, &'a Spanned<Self>),
+    BinaryOp(Spanned<BinaryOp>, &'a Spanned<Self>, &'a Spanned<Self>),
+    UnaryOp(Spanned<UnaryOp>, &'a Spanned<Self>),
     Tuple(&'a [Spanned<Self>]),
     Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum BinOp {
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
+pub enum BinaryOp {
+    #[display(fmt = "*")]
     Mul,
+    #[display(fmt = "/")]
     Div,
+    #[display(fmt = "+")]
     Add,
+    #[display(fmt = "-")]
     Sub,
+    #[display(fmt = "&&")]
     LogicalAnd,
+    #[display(fmt = "||")]
     LogicalOr,
+    #[display(fmt = ">")]
     Gt,
+    #[display(fmt = ">=")]
     Gte,
+    #[display(fmt = "<")]
     Lt,
+    #[display(fmt = "<=")]
     Lte,
+    #[display(fmt = "==")]
     Eq,
+    #[display(fmt = "!=")]
     Neq,
 }
 
