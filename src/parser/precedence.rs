@@ -1,26 +1,6 @@
 use crate::parser::ast::BinaryOp;
 use std::cmp::Ordering;
 
-impl ToString for BinaryOp {
-    fn to_string(&self) -> String {
-        match self {
-            BinaryOp::Mul => "+",
-            BinaryOp::Div => "/",
-            BinaryOp::Add => "+",
-            BinaryOp::Sub => "-",
-            BinaryOp::LogicalAnd => "&&",
-            BinaryOp::LogicalOr => "||",
-            BinaryOp::Gt => ">",
-            BinaryOp::Gte => ">=",
-            BinaryOp::Lt => "<",
-            BinaryOp::Lte => "<=",
-            BinaryOp::Eq => "==",
-            BinaryOp::Neq => "!=",
-        }
-        .to_string()
-    }
-}
-
 /// Precedence of binary operators
 ///
 /// The order of the variants of this enum is significant, because it defines
