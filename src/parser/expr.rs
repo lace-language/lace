@@ -159,8 +159,8 @@ impl<'s, 'a> Parser<'s, 'a> {
             None => Precedence::Lowest,
         };
 
-        // maybe we have an operator cached already,
-        // somewhere in the parse loop. At the start, we do not however.
+        // maybe we have an operator 'cached' already because we accidentally parsed it
+        // somewhere in the parse loop. At the start, we do not however so None.
         let mut maybe_operator = None;
 
         loop {
