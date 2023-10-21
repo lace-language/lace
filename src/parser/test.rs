@@ -302,7 +302,6 @@ fn unary() {
 
 #[test]
 fn logical() {
-    assert_expr_matches!("true || false", or!(bool!(true), bool!(false)));
     assert_expr_matches!("!true", not!(bool!(true)));
     assert_expr_matches!("!false", not!(bool!(false)));
     assert_expr_matches!("true && false", and!(bool!(true), bool!(false)));
@@ -310,6 +309,7 @@ fn logical() {
         "true && false && false",
         and!(and!(bool!(true), bool!(false)), bool!(false))
     );
+    assert_expr_matches!("true || false", or!(bool!(true), bool!(false)));
     assert_expr_matches!(
         "true || false || false",
         or!(or!(bool!(true), bool!(false)), bool!(false))
