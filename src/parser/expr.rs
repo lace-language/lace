@@ -107,10 +107,19 @@ impl Precedence {
 
     pub fn compatibility(&self, other: &Self) -> Compatibility {
         match (self.cmp(other), self.associativity()) {
+            // if the precedence of the left operator is less than the right operator
+            // then stop parsing this part of the expression and go back to the previous
+            // precedence level
             (Ordering::Less, _) => Compatibility::Stop,
+            // if the precedence of the left operator is greater than the right operator,
+            // we should keep parsing at this precedence level
             (Ordering::Greater, _) => Compatibility::Continue,
+            // if we the two operators have equal precedence levels, and the operators are
+            // a) not associative: error!
             (Ordering::Equal, Associativity::Not) => Compatibility::Incompatible,
+            // b) right associative: continue!
             (Ordering::Equal, Associativity::Right) => Compatibility::Continue,
+            // c) left associative: stop parsing at this level!
             (Ordering::Equal, Associativity::Left) => Compatibility::Stop,
         }
     }
