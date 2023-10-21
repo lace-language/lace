@@ -5,6 +5,9 @@ use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
 
+use super::ast::{BinOp, UnaryOp};
+use super::span::Span;
+
 impl<'s, 'a> Parser<'s, 'a> {
     // TODO: Proper error handling
     // TODO: Function calls
@@ -12,58 +15,59 @@ impl<'s, 'a> Parser<'s, 'a> {
         self.disjunction()
     }
 
+    fn accept_any<T>(
+        &mut self,
+        tokens: impl IntoIterator<Item = (Token<'s>, T)>,
+    ) -> ParseResult<Option<(T, Span)>> {
+        for (t, op) in tokens {
+            if let Some(span) = self.accept_optional(t)? {
+                return Ok(Some((op, span)));
+            }
+        }
+        Ok(None)
+    }
+
+    // disjunction = disjunction '&&' conjunction
+    //             | conjunction
     fn disjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.conjunction()?;
         while self.accept_optional(tok![||])?.is_some() {
             let right = self.conjunction()?;
             let span = self.spans.merge(&left, &right);
-            left = ExprKind::LogicalOr(self.alloc(left), self.alloc(right)).with_span(span)
+            left = ExprKind::BinOp(BinOp::LogicalOr, self.alloc(left), self.alloc(right))
+                .with_span(span)
         }
         Ok(left)
     }
 
-    // conjunction = conjunction 'and' inversion
+    // conjunction = conjunction '&&' inversion
     //             | inversion
     fn conjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.comparison()?;
         while self.accept_optional(tok![&&])?.is_some() {
             let right = self.comparison()?;
             let span = self.spans.merge(&left, &right);
-            left = ExprKind::LogicalAnd(self.alloc(left), self.alloc(right)).with_span(span);
+            left = ExprKind::BinOp(BinOp::LogicalAnd, self.alloc(left), self.alloc(right))
+                .with_span(span);
         }
         Ok(left)
     }
 
     fn comparison(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let left = self.inversion()?;
-        let tokens: &[(_, fn(_, _) -> _)] = &[
-            (tok![==], ExprKind::Eq),
-            (tok![!=], ExprKind::Neq),
-            (tok![>=], ExprKind::Gte),
-            (tok![<=], ExprKind::Lte),
-            (tok![>], ExprKind::Gt),
-            (tok![<], ExprKind::Lt),
-        ];
-        for (t, f) in tokens {
-            if self.accept_optional(*t)?.is_some() {
-                let right = self.inversion()?;
-                let span = self.spans.merge(&left, &right);
-                return Ok(f(self.alloc(left), self.alloc(right)).with_span(span));
-            }
-        }
-        Ok(left)
-    }
-
-    // inversion = '!' inversion
-    //           | sum
-    // TODO: this should go to comparison
-    fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        if let Some(span) = self.accept_optional(tok![!])? {
-            let arg = self.inversion()?;
-            let span = self.spans.store_merged(span, &arg);
-            Ok(ExprKind::Not(self.alloc(arg)).with_span(span))
+        let left = self.sum()?;
+        if let Some((op, _span)) = self.accept_any([
+            (tok![==], BinOp::Eq),
+            (tok![!=], BinOp::Neq),
+            (tok![>=], BinOp::Gte),
+            (tok![<=], BinOp::Lte),
+            (tok![>], BinOp::Gt),
+            (tok![<], BinOp::Lt),
+        ])? {
+            let right = self.sum()?;
+            let span = self.spans.merge(&left, &right);
+            return Ok(ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span));
         } else {
-            self.sum()
+            Ok(left)
         }
     }
 
@@ -72,19 +76,14 @@ impl<'s, 'a> Parser<'s, 'a> {
     //     | term
     fn sum(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.term()?;
-        loop {
-            if self.accept_optional(tok![+])?.is_some() {
-                let right = self.term()?;
-                let span = self.spans.merge(&left, &right);
-                left = ExprKind::Add(self.alloc(left), self.alloc(right)).with_span(span);
-            } else if self.accept_optional(tok![-])?.is_some() {
-                let right = self.term()?;
-                let span = self.spans.merge(&left, &right);
-                left = ExprKind::Sub(self.alloc(left), self.alloc(right)).with_span(span);
-            } else {
-                return Ok(left);
-            }
+        while let Some((op, _span)) =
+            self.accept_any([(tok![+], BinOp::Add), (tok![-], BinOp::Sub)])?
+        {
+            let right = self.term()?;
+            let span = self.spans.merge(&left, &right);
+            left = ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span);
         }
+        Ok(left)
     }
 
     // term = term '*' factor
@@ -92,28 +91,26 @@ impl<'s, 'a> Parser<'s, 'a> {
     //      | factor
     fn term(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let mut left = self.factor()?;
-        loop {
-            if self.accept_optional(tok![*])?.is_some() {
-                let right = self.factor()?;
-                let span = self.spans.merge(&left, &right);
-                left = ExprKind::Mul(self.alloc(left), self.alloc(right)).with_span(span);
-            } else if self.accept_optional(tok![/])?.is_some() {
-                let right = self.factor()?;
-                let span = self.spans.merge(&left, &right);
-                left = ExprKind::Div(self.alloc(left), self.alloc(right)).with_span(span);
-            } else {
-                return Ok(left);
-            }
+        while let Some((op, _span)) =
+            self.accept_any([(tok![*], BinOp::Mul), (tok![/], BinOp::Div)])?
+        {
+            let right = self.factor()?;
+            let span = self.spans.merge(&left, &right);
+            left = ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span);
         }
+        Ok(left)
     }
 
-    // factor = '-' atom
+    // factor = '-' factor
+    //        | '!' factor
     //        | atom
     fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        if let Some(span) = self.accept_optional(tok![-])? {
-            let arg = self.call_expr()?;
+        if let Some((op, span)) =
+            self.accept_any([(tok![-], UnaryOp::Neg), (tok![!], UnaryOp::Not)])?
+        {
+            let arg = self.factor()?;
             let span = self.spans.store_merged(span, &arg);
-            Ok(ExprKind::Neg(self.alloc(arg)).with_span(span))
+            Ok(ExprKind::UnaryOp(op, self.alloc(arg)).with_span(span))
         } else {
             self.call_expr()
         }
@@ -151,16 +148,15 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn call_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let atom = self.atom()?;
+        let mut expr = self.atom()?;
 
-        if self.peek_is(Token::RoundLeft)? {
+        while self.peek_is(Token::RoundLeft)? {
             let args = self.call_args()?;
-
-            let span = self.spans.merge(&atom, &args);
-            Ok(ExprKind::Call(self.alloc(atom), args).with_span(span))
-        } else {
-            Ok(atom)
+            let span = self.spans.merge(&expr, &args);
+            expr = ExprKind::Call(self.alloc(expr), args).with_span(span);
         }
+
+        Ok(expr)
     }
 
     fn atom(&mut self) -> ParseResult<Expr<'s, 'a>> {

@@ -13,23 +13,33 @@ pub enum ExprKind<'s, 'a> {
     ),
     Block(&'a Spanned<Block<'s, 'a>>),
     Ident(Ident<'s>),
-    Neg(&'a Spanned<Self>),
     Paren(&'a Spanned<Self>),
-    Mul(&'a Spanned<Self>, &'a Spanned<Self>),
-    Div(&'a Spanned<Self>, &'a Spanned<Self>),
-    Add(&'a Spanned<Self>, &'a Spanned<Self>),
-    Sub(&'a Spanned<Self>, &'a Spanned<Self>),
-    Not(&'a Spanned<Self>),
-    LogicalAnd(&'a Spanned<Self>, &'a Spanned<Self>),
-    LogicalOr(&'a Spanned<Self>, &'a Spanned<Self>),
+    BinOp(BinOp, &'a Spanned<Self>, &'a Spanned<Self>),
+    UnaryOp(UnaryOp, &'a Spanned<Self>),
     Tuple(&'a [Spanned<Self>]),
-    Gt(&'a Spanned<Self>, &'a Spanned<Self>),
-    Gte(&'a Spanned<Self>, &'a Spanned<Self>),
-    Lt(&'a Spanned<Self>, &'a Spanned<Self>),
-    Lte(&'a Spanned<Self>, &'a Spanned<Self>),
-    Eq(&'a Spanned<Self>, &'a Spanned<Self>),
-    Neq(&'a Spanned<Self>, &'a Spanned<Self>),
     Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum BinOp {
+    Mul,
+    Div,
+    Add,
+    Sub,
+    LogicalAnd,
+    LogicalOr,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+    Eq,
+    Neq,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum UnaryOp {
+    Not,
+    Neg,
 }
 
 #[derive(Debug, PartialEq, Eq)]
