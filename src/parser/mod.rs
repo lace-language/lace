@@ -16,6 +16,7 @@ pub mod statement;
 pub mod toplevel;
 pub mod type_spec;
 
+mod precedence;
 #[cfg(test)]
 pub mod test;
 
@@ -81,5 +82,29 @@ impl<'s, 'a> Parser<'s, 'a> {
                 span,
             })
         }
+    }
+
+    fn accept_any<T>(
+        &mut self,
+        tokens: impl IntoIterator<Item = (Token<'s>, T)>,
+    ) -> ParseResult<Option<(T, Span)>> {
+        for (t, op) in tokens {
+            if let Some(span) = self.accept_optional(t)? {
+                return Ok(Some((op, span)));
+            }
+        }
+        Ok(None)
+    }
+
+    fn peek_any<T>(
+        &mut self,
+        tokens: impl IntoIterator<Item = (Token<'s>, T)>,
+    ) -> ParseResult<Option<T>> {
+        for (t, op) in tokens {
+            if self.peek_is(t)? {
+                return Ok(Some(op));
+            }
+        }
+        Ok(None)
     }
 }
