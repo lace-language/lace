@@ -328,6 +328,12 @@ fn logical() {
 }
 
 #[test]
+fn inversion_and_arithmetic() {
+    assert_expr_matches!("!false + false", add!(not!(bool!(false)), bool!(false)));
+    assert_expr_matches!("!false - false", sub!(not!(bool!(false)), bool!(false)));
+}
+
+#[test]
 fn arithmetic_binop() {
     assert_expr_matches!("2 + 3", add!(int!(2), int!(3)));
     assert_expr_matches!("2 + 3 + 4", add!(add!(int!(2), int!(3)), int!(4)));

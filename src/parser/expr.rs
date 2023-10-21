@@ -35,7 +35,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn comparison(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let left = self.inversion()?;
+        let left = self.sum()?;
         let tokens: &[(_, fn(_, _) -> _)] = &[
             (tok![==], ExprKind::Eq),
             (tok![!=], ExprKind::Neq),
@@ -46,25 +46,12 @@ impl<'s, 'a> Parser<'s, 'a> {
         ];
         for (t, f) in tokens {
             if self.accept_optional(*t)?.is_some() {
-                let right = self.inversion()?;
+                let right = self.sum()?;
                 let span = self.spans.merge(&left, &right);
                 return Ok(f(self.alloc(left), self.alloc(right)).with_span(span));
             }
         }
         Ok(left)
-    }
-
-    // inversion = '!' inversion
-    //           | sum
-    // TODO: this should go to comparison
-    fn inversion(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        if let Some(span) = self.accept_optional(tok![!])? {
-            let arg = self.inversion()?;
-            let span = self.spans.store_merged(span, &arg);
-            Ok(ExprKind::Not(self.alloc(arg)).with_span(span))
-        } else {
-            self.sum()
-        }
     }
 
     // sum = sum '+' term
@@ -107,13 +94,18 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
     }
 
-    // factor = '-' atom
+    // factor = '-' factor
+    //        | '!' factor
     //        | atom
     fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some(span) = self.accept_optional(tok![-])? {
-            let arg = self.call_expr()?;
+            let arg = self.factor()?;
             let span = self.spans.store_merged(span, &arg);
             Ok(ExprKind::Neg(self.alloc(arg)).with_span(span))
+        } else if let Some(span) = self.accept_optional(tok![!])? {
+            let arg = self.factor()?;
+            let span = self.spans.store_merged(span, &arg);
+            Ok(ExprKind::Not(self.alloc(arg)).with_span(span))
         } else {
             self.call_expr()
         }
