@@ -151,16 +151,15 @@ impl<'s, 'a> Parser<'s, 'a> {
     }
 
     fn call_expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let atom = self.atom()?;
+        let mut expr = self.atom()?;
 
-        if self.peek_is(Token::RoundLeft)? {
+        while self.peek_is(Token::RoundLeft)? {
             let args = self.call_args()?;
-
-            let span = self.spans.merge(&atom, &args);
-            Ok(ExprKind::Call(self.alloc(atom), args).with_span(span))
-        } else {
-            Ok(atom)
+            let span = self.spans.merge(&expr, &args);
+            expr = ExprKind::Call(self.alloc(expr), args).with_span(span);
         }
+
+        Ok(expr)
     }
 
     fn atom(&mut self) -> ParseResult<Expr<'s, 'a>> {
