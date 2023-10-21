@@ -57,7 +57,7 @@ fn main() -> ExitCode {
     let cli = Options::parse();
     let file_name = &cli.file_name;
     let contents = std::fs::read_to_string(file_name).unwrap();
-    let source_file = SourceFile::new(&contents, file_name);
+    let source_file = SourceFile::new(file_name, &contents);
 
     let arena = Bump::new();
 

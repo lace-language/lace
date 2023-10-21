@@ -165,8 +165,8 @@ impl<'s, 'a> Graph {
             // because the parameter should shadow previous bindings.
             let param_def = self.new_definition(&param.name);
             self.edge(internal_scope, param_def, 1);
-            self.block(internal_scope, f.block);
         }
+        self.block(internal_scope, f.block);
     }
 
     fn block(&mut self, scope: Handle<Node>, block: &Spanned<Block<'s, 'a>>) {
