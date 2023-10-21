@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::ice::{self, Ice};
+use crate::ice::Ice;
 use crate::lexer::token::Token;
 use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
@@ -37,6 +37,8 @@ impl ToString for BinaryOp {
 /// derived implementation of `PartialOrd`/`Ord`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Precedence {
+    Lowest,
+
     /// The precedence of logical disjunction.
     Disjunction,
 
@@ -64,6 +66,7 @@ pub enum Associativity {
     /// Right associativity.
     ///
     /// `<x> o <y> o <z>` is parsed as `<x> o (<y> o <z>)`.
+    #[allow(unused)]
     Right,
 
     /// Incompatible operators
@@ -98,14 +101,15 @@ impl Precedence {
                 Associativity::Left
             }
             Self::Comparison => Associativity::Not,
+            Self::Lowest => Associativity::Not,
         }
     }
 
     pub fn compatibility(&self, other: &Self) -> Compatibility {
         match (self.cmp(other), self.associativity()) {
-            (_, Associativity::Not) => Compatibility::Incompatible,
             (Ordering::Less, _) => Compatibility::Stop,
             (Ordering::Greater, _) => Compatibility::Continue,
+            (Ordering::Equal, Associativity::Not) => Compatibility::Incompatible,
             (Ordering::Equal, Associativity::Right) => Compatibility::Continue,
             (Ordering::Equal, Associativity::Left) => Compatibility::Stop,
         }
@@ -118,7 +122,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
         let lhs = self.unary()?;
         let (expr, maybe_op) = self.binary_expr(lhs, None)?;
-        if maybe_op.is_none() {
+        if maybe_op.is_some() {
             ice!("there was an binary operator left at the lowest precedence level");
         }
         Ok(expr)
@@ -143,7 +147,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     ) -> ParseResult<(Expr<'s, 'a>, Option<Spanned<BinaryOp>>)> {
         let precedence_bound = match last_operator {
             Some(last_operator) => last_operator.precedence(),
-            None => Precedence::Disjunction,
+            None => Precedence::Lowest,
         };
 
         // maybe we have an operator cached already,
