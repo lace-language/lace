@@ -70,10 +70,14 @@ pub enum Associativity {
     Not,
 }
 
+/// Specify whether an operator is compatible with another operator while parsing at a certain precedence level.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Compatibility {
+    /// The operator is compatible with the previous, continue parsing at this level
     Continue,
+    /// The operator is not compatible with the previous, stop parsing at this level
     Stop,
+    /// The operator is so incompatible with the previous it's an error to write this at any level
     Incompatible,
 }
 
