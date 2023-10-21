@@ -1,5 +1,11 @@
 use std::error::Error;
 
+macro_rules! ice {
+    ($($tt:tt)*) => {
+        panic!("ICE {}", format_args!($($tt)*))
+    }
+}
+
 pub trait Ice<T> {
     fn ice(self, message: &str) -> T;
 }
@@ -7,7 +13,9 @@ pub trait Ice<T> {
 impl<T> Ice<T> for Option<T> {
     fn ice(self, message: &str) -> T {
         match self {
-            None => panic!("ICE: {}", message),
+            None => {
+                ice!("{}", message)
+            }
             Some(v) => v,
         }
     }
@@ -18,7 +26,7 @@ impl<T, E: Error> Ice<T> for Result<T, E> {
         match self {
             Ok(v) => v,
             Err(e) => {
-                panic!("ICE: {message} (error was: {e})");
+                ice!("{message} (error was: {e})")
             }
         }
     }

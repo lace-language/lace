@@ -1,3 +1,6 @@
+use std::cmp::Ordering;
+
+use crate::ice::{self, Ice};
 use crate::lexer::token::Token;
 use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
@@ -5,14 +8,120 @@ use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
 
-use super::ast::{BinOp, UnaryOp};
+use super::ast::{BinaryOp, UnaryOp};
 use super::span::Span;
+
+impl ToString for BinaryOp {
+    fn to_string(&self) -> String {
+        match self {
+            BinaryOp::Mul => "+",
+            BinaryOp::Div => "/",
+            BinaryOp::Add => "+",
+            BinaryOp::Sub => "-",
+            BinaryOp::LogicalAnd => "&&",
+            BinaryOp::LogicalOr => "||",
+            BinaryOp::Gt => ">",
+            BinaryOp::Gte => ">=",
+            BinaryOp::Lt => "<",
+            BinaryOp::Lte => "<=",
+            BinaryOp::Eq => "==",
+            BinaryOp::Neq => "!=",
+        }
+        .to_string()
+    }
+}
+
+/// Precedence of binary operators
+///
+/// The order of the variants of this enum is significant, because it defines
+/// derived implementation of `PartialOrd`/`Ord`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Precedence {
+    /// The precedence of logical disjunction.
+    Disjunction,
+
+    /// The precedence of logical conjunction.
+    Conjunction,
+
+    /// The precedence of comparison operators.
+    Comparison,
+
+    /// The precedence of addition and subtraction.
+    AddSub,
+
+    /// The precedence of multiplication and division.
+    MulDiv,
+}
+
+/// Associativity of binary operator.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Associativity {
+    /// Left associativity.
+    ///
+    /// `<x> o <y> o <z>` is parsed as `(<x> o <y>) o <z>`.
+    Left,
+
+    /// Right associativity.
+    ///
+    /// `<x> o <y> o <z>` is parsed as `<x> o (<y> o <z>)`.
+    Right,
+
+    /// Incompatible operators
+    Not,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Compatibility {
+    Continue,
+    Stop,
+    Incompatible,
+}
+
+impl BinaryOp {
+    fn precedence(&self) -> Precedence {
+        match self {
+            Self::LogicalOr => Precedence::Disjunction,
+            Self::LogicalAnd => Precedence::Conjunction,
+            Self::Eq | Self::Neq | Self::Lt | Self::Lte | Self::Gt | Self::Gte => {
+                Precedence::Comparison
+            }
+            Self::Mul | Self::Div => Precedence::MulDiv,
+            Self::Add | Self::Sub => Precedence::AddSub,
+        }
+    }
+}
+
+impl Precedence {
+    fn associativity(&self) -> Associativity {
+        match self {
+            Self::Disjunction | Self::Conjunction | Self::AddSub | Self::MulDiv => {
+                Associativity::Left
+            }
+            Self::Comparison => Associativity::Not,
+        }
+    }
+
+    pub fn compatibility(&self, other: &Self) -> Compatibility {
+        match (self.cmp(other), self.associativity()) {
+            (_, Associativity::Not) => Compatibility::Incompatible,
+            (Ordering::Less, _) => Compatibility::Stop,
+            (Ordering::Greater, _) => Compatibility::Continue,
+            (Ordering::Equal, Associativity::Right) => Compatibility::Continue,
+            (Ordering::Equal, Associativity::Left) => Compatibility::Stop,
+        }
+    }
+}
 
 impl<'s, 'a> Parser<'s, 'a> {
     // TODO: Proper error handling
     // TODO: Function calls
     pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        self.disjunction()
+        let lhs = self.unary()?;
+        let (expr, maybe_op) = self.binary_expr(lhs, None)?;
+        if maybe_op.is_none() {
+            ice!("there was an binary operator left at the lowest precedence level");
+        }
+        Ok(expr)
     }
 
     fn accept_any<T>(
@@ -27,90 +136,102 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(None)
     }
 
-    // disjunction = disjunction '&&' conjunction
-    //             | conjunction
-    fn disjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.conjunction()?;
-        while self.accept_optional(tok![||])?.is_some() {
-            let right = self.conjunction()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(BinOp::LogicalOr, self.alloc(left), self.alloc(right))
-                .with_span(span)
+    fn binary_expr(
+        &mut self,
+        mut lhs: Expr<'s, 'a>,
+        last_operator: Option<&Spanned<BinaryOp>>,
+    ) -> ParseResult<(Expr<'s, 'a>, Option<Spanned<BinaryOp>>)> {
+        let precedence_bound = match last_operator {
+            Some(last_operator) => last_operator.precedence(),
+            None => Precedence::Disjunction,
+        };
+
+        // maybe we have an operator cached already,
+        // somewhere in the parse loop. At the start, we do not however.
+        let mut maybe_operator = None;
+
+        loop {
+            // if we have a cached operator: take it
+            // if we don't, parse a new one!
+            // else, this is the end of the expression
+            let operator = if let Some(operator) = maybe_operator.take() {
+                operator
+            } else if let Some(operator) = self.binary_operator()? {
+                operator
+            } else {
+                break;
+            };
+
+            // now we look at the precedence and associativity of our operator,
+            // and determine wether we should continue parsing more expression
+            // or return back up
+            match operator.value.precedence().compatibility(&precedence_bound) {
+                Compatibility::Continue => {
+                    // if we continue,
+                    // parse the left hand side of the next expression
+                    let new_lhs = self.unary()?;
+                    // and now parse a next expression, with this newly parsed
+                    // left hand side. Maybe, it parses an operator too many,
+                    // in that case it returns it and we cache it in `maybe_operator`
+                    // and use it next if we determine we should not return it ourselves
+                    let (rhs, maybe_new_op) = self.binary_expr(new_lhs, Some(&operator))?;
+                    maybe_operator = maybe_new_op;
+
+                    // make an expression, and loop
+                    let span = self.spans.merge(&lhs, &rhs);
+                    lhs = ExprKind::BinaryOp(operator, self.alloc(lhs), self.alloc(rhs))
+                        .with_span(span);
+                }
+                Compatibility::Stop => {
+                    return Ok((lhs, Some(operator)));
+                }
+                Compatibility::Incompatible => {
+                    let last_operator = last_operator
+                        .ice("we can never have incompatibility if there was no last operator");
+
+                    return Err(ParseError::IncompatibleBinaryOp {
+                        left_operator: last_operator.value.to_string(),
+                        right_operator: operator.value.to_string(),
+                        left_operator_span: self.spans.get(last_operator.span),
+                        right_operator_span: self.spans.get(operator.span),
+                    });
+                }
+            }
         }
-        Ok(left)
+
+        Ok((lhs, None))
     }
 
-    // conjunction = conjunction '&&' inversion
-    //             | inversion
-    fn conjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.comparison()?;
-        while self.accept_optional(tok![&&])?.is_some() {
-            let right = self.comparison()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(BinOp::LogicalAnd, self.alloc(left), self.alloc(right))
-                .with_span(span);
-        }
-        Ok(left)
+    fn binary_operator(&mut self) -> ParseResult<Option<Spanned<BinaryOp>>> {
+        let Some((operator, span)) = self.accept_any([
+            (tok![*], BinaryOp::Mul),
+            (tok![/], BinaryOp::Div),
+            (tok![+], BinaryOp::Add),
+            (tok![-], BinaryOp::Sub),
+            (tok![&&], BinaryOp::LogicalAnd),
+            (tok![||], BinaryOp::LogicalOr),
+            (tok![>], BinaryOp::Gt),
+            (tok![>=], BinaryOp::Gte),
+            (tok![<], BinaryOp::Lt),
+            (tok![<=], BinaryOp::Lte),
+            (tok![==], BinaryOp::Eq),
+            (tok![!=], BinaryOp::Neq),
+        ])?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(operator.with_span(self.spans.store(span))))
     }
 
-    fn comparison(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let left = self.sum()?;
-        if let Some((op, _span)) = self.accept_any([
-            (tok![==], BinOp::Eq),
-            (tok![!=], BinOp::Neq),
-            (tok![>=], BinOp::Gte),
-            (tok![<=], BinOp::Lte),
-            (tok![>], BinOp::Gt),
-            (tok![<], BinOp::Lt),
-        ])? {
-            let right = self.sum()?;
-            let span = self.spans.merge(&left, &right);
-            return Ok(ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span));
-        } else {
-            Ok(left)
-        }
-    }
-
-    // sum = sum '+' term
-    //     | sum '-' term
-    //     | term
-    fn sum(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.term()?;
-        while let Some((op, _span)) =
-            self.accept_any([(tok![+], BinOp::Add), (tok![-], BinOp::Sub)])?
-        {
-            let right = self.term()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span);
-        }
-        Ok(left)
-    }
-
-    // term = term '*' factor
-    //      | term '/' factor
-    //      | factor
-    fn term(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.factor()?;
-        while let Some((op, _span)) =
-            self.accept_any([(tok![*], BinOp::Mul), (tok![/], BinOp::Div)])?
-        {
-            let right = self.factor()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span);
-        }
-        Ok(left)
-    }
-
-    // factor = '-' factor
-    //        | '!' factor
-    //        | atom
-    fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn unary(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some((op, span)) =
             self.accept_any([(tok![-], UnaryOp::Neg), (tok![!], UnaryOp::Not)])?
         {
-            let arg = self.factor()?;
+            let operator_span = self.spans.store(span);
+            let arg = self.unary()?;
             let span = self.spans.store_merged(span, &arg);
-            Ok(ExprKind::UnaryOp(op, self.alloc(arg)).with_span(span))
+            Ok(ExprKind::UnaryOp(op.with_span(operator_span), self.alloc(arg)).with_span(span))
         } else {
             self.call_expr()
         }

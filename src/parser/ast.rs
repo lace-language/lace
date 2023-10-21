@@ -14,14 +14,14 @@ pub enum ExprKind<'s, 'a> {
     Block(&'a Spanned<Block<'s, 'a>>),
     Ident(Ident<'s>),
     Paren(&'a Spanned<Self>),
-    BinOp(BinOp, &'a Spanned<Self>, &'a Spanned<Self>),
-    UnaryOp(UnaryOp, &'a Spanned<Self>),
+    BinaryOp(Spanned<BinaryOp>, &'a Spanned<Self>, &'a Spanned<Self>),
+    UnaryOp(Spanned<UnaryOp>, &'a Spanned<Self>),
     Tuple(&'a [Spanned<Self>]),
     Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum BinOp {
+pub enum BinaryOp {
     Mul,
     Div,
     Add,

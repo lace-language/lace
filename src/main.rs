@@ -1,7 +1,8 @@
 #![allow(clippy::module_inception)]
 
-mod error;
+#[macro_use]
 mod ice;
+mod error;
 mod lexer;
 mod parser;
 mod source_file;
