@@ -1,6 +1,6 @@
 use crate::lexer::token_buffer::TokenBuffer;
 use crate::parser::ast::{
-    BinOp, Block, ExprKind, File, Function, Ident, Item, Lit, Parameter, Statement, TypeSpec,
+    BinaryOp, Block, ExprKind, File, Function, Ident, Item, Lit, Parameter, Statement, TypeSpec,
     UnaryOp,
 };
 use crate::parser::span::Spanned;
@@ -86,85 +86,85 @@ macro_rules! bool {
 
 macro_rules! neg {
     ($x:pat) => {
-        spanned!(ExprKind::UnaryOp(UnaryOp::Neg, $x))
+        spanned!(ExprKind::UnaryOp(spanned!(UnaryOp::Neg), $x))
     };
 }
 
 macro_rules! not {
     ($x:pat) => {
-        spanned!(ExprKind::UnaryOp(UnaryOp::Not, $x))
+        spanned!(ExprKind::UnaryOp(spanned!(UnaryOp::Not), $x))
     };
 }
 
 macro_rules! and {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::LogicalAnd, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::LogicalAnd), $x, $y))
     };
 }
 
 macro_rules! or {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::LogicalOr, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::LogicalOr), $x, $y))
     };
 }
 
 macro_rules! add {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Add, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Add), $x, $y))
     };
 }
 
 macro_rules! sub {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Sub, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Sub), $x, $y))
     };
 }
 
 macro_rules! mul {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Mul, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Mul), $x, $y))
     };
 }
 
 macro_rules! div {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Div, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Div), $x, $y))
     };
 }
 
 macro_rules! gt {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Gt, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Gt), $x, $y))
     };
 }
 
 macro_rules! gte {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Gte, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Gte), $x, $y))
     };
 }
 
 macro_rules! lt {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Lt, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Lt), $x, $y))
     };
 }
 
 macro_rules! lte {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Lte, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Lte), $x, $y))
     };
 }
 
 macro_rules! eq {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Eq, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Eq), $x, $y))
     };
 }
 
 macro_rules! neq {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinOp(BinOp::Neq, $x, $y))
+        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Neq), $x, $y))
     };
 }
 

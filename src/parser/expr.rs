@@ -1,116 +1,103 @@
 use crate::lexer::token::Token;
 use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
+use crate::parser::precedence::Compatibility;
 use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
 
-use super::ast::{BinOp, UnaryOp};
-use super::span::Span;
+use super::ast::{BinaryOp, UnaryOp};
 
 impl<'s, 'a> Parser<'s, 'a> {
-    // TODO: Proper error handling
-    // TODO: Function calls
     pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        self.disjunction()
+        let mut lhs = self.unary()?;
+
+        while let Some(operator) = self.peek_binary_operator()? {
+            lhs = self.binary_expr_rhs(lhs, operator)?;
+        }
+
+        Ok(lhs)
     }
 
-    fn accept_any<T>(
+    fn binary_expr(
         &mut self,
-        tokens: impl IntoIterator<Item = (Token<'s>, T)>,
-    ) -> ParseResult<Option<(T, Span)>> {
-        for (t, op) in tokens {
-            if let Some(span) = self.accept_optional(t)? {
-                return Ok(Some((op, span)));
+        mut lhs: Expr<'s, 'a>,
+        last_operator: &Spanned<BinaryOp>,
+    ) -> ParseResult<Expr<'s, 'a>> {
+        while let Some(operator) = self.peek_binary_operator()? {
+            // now we look at the precedence and associativity of our operator,
+            // and determine whether we should continue parsing more expression
+            // or return back up
+            match operator.compatibility(last_operator) {
+                Compatibility::Continue => lhs = self.binary_expr_rhs(lhs, operator)?,
+                Compatibility::Stop => break,
+                Compatibility::Incompatible => {
+                    // we peeked already that an operator is coming, we just need to know its span
+                    let (_, span) = self.next()?;
+
+                    return Err(ParseError::IncompatibleBinaryOp {
+                        left_operator: last_operator.value.to_string(),
+                        right_operator: operator.to_string(),
+                        left_operator_span: self.spans.get(last_operator.span),
+                        right_operator_span: span,
+                    });
+                }
             }
         }
-        Ok(None)
+
+        Ok(lhs)
     }
 
-    // disjunction = disjunction '&&' conjunction
-    //             | conjunction
-    fn disjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.conjunction()?;
-        while self.accept_optional(tok![||])?.is_some() {
-            let right = self.conjunction()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(BinOp::LogicalOr, self.alloc(left), self.alloc(right))
-                .with_span(span)
-        }
-        Ok(left)
+    fn binary_expr_rhs(
+        &mut self,
+        lhs: Expr<'s, 'a>,
+        operator: BinaryOp,
+    ) -> Result<Expr<'s, 'a>, ParseError> {
+        // we peeked already that an operator is coming, we just need to know its span and progress the parser
+        let (_, span) = self.next()?;
+        let span = self.spans.store(span);
+        let operator = operator.with_span(span);
+
+        // if we continue,
+        // parse the left hand side of the next expression
+        let new_lhs = self.unary()?;
+        // and now parse a next expression, with this newly parsed
+        // left hand side. Maybe, it parses an operator too many,
+        // in that case it returns it and we cache it in `maybe_operator`
+        // and use it next if we determine we should not return it ourselves
+        let rhs = self.binary_expr(new_lhs, &operator)?;
+
+        // make an expression, and loop
+        let span = self.spans.merge(&lhs, &rhs);
+
+        Ok(ExprKind::BinaryOp(operator, self.alloc(lhs), self.alloc(rhs)).with_span(span))
     }
 
-    // conjunction = conjunction '&&' inversion
-    //             | inversion
-    fn conjunction(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.comparison()?;
-        while self.accept_optional(tok![&&])?.is_some() {
-            let right = self.comparison()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(BinOp::LogicalAnd, self.alloc(left), self.alloc(right))
-                .with_span(span);
-        }
-        Ok(left)
+    fn peek_binary_operator(&mut self) -> ParseResult<Option<BinaryOp>> {
+        self.peek_any([
+            (tok![*], BinaryOp::Mul),
+            (tok![/], BinaryOp::Div),
+            (tok![+], BinaryOp::Add),
+            (tok![-], BinaryOp::Sub),
+            (tok![&&], BinaryOp::LogicalAnd),
+            (tok![||], BinaryOp::LogicalOr),
+            (tok![>], BinaryOp::Gt),
+            (tok![>=], BinaryOp::Gte),
+            (tok![<], BinaryOp::Lt),
+            (tok![<=], BinaryOp::Lte),
+            (tok![==], BinaryOp::Eq),
+            (tok![!=], BinaryOp::Neq),
+        ])
     }
 
-    fn comparison(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let left = self.sum()?;
-        if let Some((op, _span)) = self.accept_any([
-            (tok![==], BinOp::Eq),
-            (tok![!=], BinOp::Neq),
-            (tok![>=], BinOp::Gte),
-            (tok![<=], BinOp::Lte),
-            (tok![>], BinOp::Gt),
-            (tok![<], BinOp::Lt),
-        ])? {
-            let right = self.sum()?;
-            let span = self.spans.merge(&left, &right);
-            return Ok(ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span));
-        } else {
-            Ok(left)
-        }
-    }
-
-    // sum = sum '+' term
-    //     | sum '-' term
-    //     | term
-    fn sum(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.term()?;
-        while let Some((op, _span)) =
-            self.accept_any([(tok![+], BinOp::Add), (tok![-], BinOp::Sub)])?
-        {
-            let right = self.term()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span);
-        }
-        Ok(left)
-    }
-
-    // term = term '*' factor
-    //      | term '/' factor
-    //      | factor
-    fn term(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let mut left = self.factor()?;
-        while let Some((op, _span)) =
-            self.accept_any([(tok![*], BinOp::Mul), (tok![/], BinOp::Div)])?
-        {
-            let right = self.factor()?;
-            let span = self.spans.merge(&left, &right);
-            left = ExprKind::BinOp(op, self.alloc(left), self.alloc(right)).with_span(span);
-        }
-        Ok(left)
-    }
-
-    // factor = '-' factor
-    //        | '!' factor
-    //        | atom
-    fn factor(&mut self) -> ParseResult<Expr<'s, 'a>> {
+    fn unary(&mut self) -> ParseResult<Expr<'s, 'a>> {
         if let Some((op, span)) =
             self.accept_any([(tok![-], UnaryOp::Neg), (tok![!], UnaryOp::Not)])?
         {
-            let arg = self.factor()?;
+            let operator_span = self.spans.store(span);
+            let arg = self.unary()?;
             let span = self.spans.store_merged(span, &arg);
-            Ok(ExprKind::UnaryOp(op, self.alloc(arg)).with_span(span))
+            Ok(ExprKind::UnaryOp(op.with_span(operator_span), self.alloc(arg)).with_span(span))
         } else {
             self.call_expr()
         }
