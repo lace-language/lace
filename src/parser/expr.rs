@@ -173,12 +173,8 @@ impl<'s, 'a> Parser<'s, 'a> {
                 .precedence()
                 .compatibility(&last_operator.precedence())
             {
-                Compatibility::Continue => {
-                    lhs = self.binary_expr_rhs(lhs, operator)?;
-                }
-                Compatibility::Stop => {
-                    return Ok(lhs);
-                }
+                Compatibility::Continue => lhs = self.binary_expr_rhs(lhs, operator)?,
+                Compatibility::Stop => break,
                 Compatibility::Incompatible => {
                     // we peeked already that an operator is coming, we just need to know its span
                     let (_, span) = self.next()?;
