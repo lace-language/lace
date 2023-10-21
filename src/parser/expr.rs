@@ -93,20 +93,22 @@ impl BinaryOp {
             Self::Add | Self::Sub => Precedence::AddSub,
         }
     }
-}
 
-impl Precedence {
     fn associativity(&self) -> Associativity {
-        match self {
-            Self::Disjunction | Self::Conjunction | Self::AddSub | Self::MulDiv => {
-                Associativity::Left
-            }
-            Self::Comparison => Associativity::Not,
+        match self.precedence() {
+            Precedence::Disjunction
+            | Precedence::Conjunction
+            | Precedence::AddSub
+            | Precedence::MulDiv => Associativity::Left,
+            Precedence::Comparison => Associativity::Not,
         }
     }
 
     pub fn compatibility(&self, other: &Self) -> Compatibility {
-        match (self.cmp(other), self.associativity()) {
+        match (
+            self.precedence().cmp(&other.precedence()),
+            self.associativity(),
+        ) {
             // if the precedence of the left operator is less than the right operator
             // then stop parsing this part of the expression and go back to the previous
             // precedence level
@@ -169,10 +171,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             // now we look at the precedence and associativity of our operator,
             // and determine whether we should continue parsing more expression
             // or return back up
-            match operator
-                .precedence()
-                .compatibility(&last_operator.precedence())
-            {
+            match operator.compatibility(&last_operator) {
                 Compatibility::Continue => lhs = self.binary_expr_rhs(lhs, operator)?,
                 Compatibility::Stop => break,
                 Compatibility::Incompatible => {
