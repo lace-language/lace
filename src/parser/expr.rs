@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 
-use crate::ice::Ice;
 use crate::lexer::token::Token;
 use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
@@ -37,8 +36,6 @@ impl ToString for BinaryOp {
 /// derived implementation of `PartialOrd`/`Ord`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Precedence {
-    Lowest,
-
     /// The precedence of logical disjunction.
     Disjunction,
 
@@ -101,7 +98,6 @@ impl Precedence {
                 Associativity::Left
             }
             Self::Comparison => Associativity::Not,
-            Self::Lowest => Associativity::Not,
         }
     }
 
@@ -126,11 +122,14 @@ impl Precedence {
 }
 
 impl<'s, 'a> Parser<'s, 'a> {
-    // TODO: Proper error handling
-    // TODO: Function calls
     pub fn expr(&mut self) -> ParseResult<Expr<'s, 'a>> {
-        let lhs = self.unary()?;
-        self.binary_expr(lhs, None)
+        let mut lhs = self.unary()?;
+
+        while let Some(operator) = self.peek_binary_operator()? {
+            lhs = self.binary_expr_rhs(lhs, operator)?;
+        }
+
+        Ok(lhs)
     }
 
     fn accept_any<T>(
@@ -160,45 +159,23 @@ impl<'s, 'a> Parser<'s, 'a> {
     fn binary_expr(
         &mut self,
         mut lhs: Expr<'s, 'a>,
-        last_operator: Option<&Spanned<BinaryOp>>,
+        last_operator: &Spanned<BinaryOp>,
     ) -> ParseResult<Expr<'s, 'a>> {
-        let precedence_bound = match last_operator {
-            Some(last_operator) => last_operator.precedence(),
-            None => Precedence::Lowest,
-        };
-
         while let Some(operator) = self.peek_binary_operator()? {
             // now we look at the precedence and associativity of our operator,
             // and determine whether we should continue parsing more expression
             // or return back up
-            match operator.precedence().compatibility(&precedence_bound) {
+            match operator
+                .precedence()
+                .compatibility(&last_operator.precedence())
+            {
                 Compatibility::Continue => {
-                    // we peeked already that an operator is coming, we just need to know its span and progress the parser
-                    let (_, span) = self.next()?;
-                    let span = self.spans.store(span);
-                    let operator = operator.with_span(span);
-
-                    // if we continue,
-                    // parse the left hand side of the next expression
-                    let new_lhs = self.unary()?;
-                    // and now parse a next expression, with this newly parsed
-                    // left hand side. Maybe, it parses an operator too many,
-                    // in that case it returns it and we cache it in `maybe_operator`
-                    // and use it next if we determine we should not return it ourselves
-                    let rhs = self.binary_expr(new_lhs, Some(&operator))?;
-
-                    // make an expression, and loop
-                    let span = self.spans.merge(&lhs, &rhs);
-                    lhs = ExprKind::BinaryOp(operator, self.alloc(lhs), self.alloc(rhs))
-                        .with_span(span);
+                    lhs = self.binary_expr_rhs(lhs, operator)?;
                 }
                 Compatibility::Stop => {
                     return Ok(lhs);
                 }
                 Compatibility::Incompatible => {
-                    let last_operator = last_operator
-                        .unwrap_or_ice("we can never have incompatibility if there was no last operator");
-
                     // we peeked already that an operator is coming, we just need to know its span
                     let (_, span) = self.next()?;
 
@@ -213,6 +190,31 @@ impl<'s, 'a> Parser<'s, 'a> {
         }
 
         Ok(lhs)
+    }
+
+    fn binary_expr_rhs(
+        &mut self,
+        lhs: Expr<'s, 'a>,
+        operator: BinaryOp,
+    ) -> Result<Expr<'s, 'a>, ParseError> {
+        // we peeked already that an operator is coming, we just need to know its span and progress the parser
+        let (_, span) = self.next()?;
+        let span = self.spans.store(span);
+        let operator = operator.with_span(span);
+
+        // if we continue,
+        // parse the left hand side of the next expression
+        let new_lhs = self.unary()?;
+        // and now parse a next expression, with this newly parsed
+        // left hand side. Maybe, it parses an operator too many,
+        // in that case it returns it and we cache it in `maybe_operator`
+        // and use it next if we determine we should not return it ourselves
+        let rhs = self.binary_expr(new_lhs, &operator)?;
+
+        // make an expression, and loop
+        let span = self.spans.merge(&lhs, &rhs);
+
+        Ok(ExprKind::BinaryOp(operator, self.alloc(lhs), self.alloc(rhs)).with_span(span))
     }
 
     fn peek_binary_operator(&mut self) -> ParseResult<Option<BinaryOp>> {
