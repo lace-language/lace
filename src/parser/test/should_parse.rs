@@ -1,3 +1,5 @@
+use crate::parser::ast::*;
+
 #[test]
 fn booleans() {
     assert_expr_matches!("false", bool!(false));
@@ -15,6 +17,7 @@ fn integers() {
 #[test]
 fn unary() {
     assert_expr_matches!("- 2", neg!(int!(2)));
+    assert_expr_matches!("-- 2", neg!(neg!(int!(2))));
     assert_expr_matches!("- 2 + 3", add!(neg!(int!(2)), int!(3)));
 }
 
