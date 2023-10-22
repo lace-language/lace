@@ -1,0 +1,12 @@
+[package]
+name = "unionfind"
+version = "0.2.0"
+edition = "2021"
+description = "A union find library made for building type inference engines. Can be used as general purpose datastructure."
+license = "Apache-2.0"
+repository = "https://github.com/lace-language/lace"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = "1.0.31"

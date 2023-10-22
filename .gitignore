@@ -1,2 +1,4 @@
 /target
 .idea
+tarpaulin-report.html
+test.lc
