@@ -1,31 +1,3 @@
-macro_rules! assert_expr_matches {
-    ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
-        let arena = ::bumpalo::Bump::new();
-
-        let source = $crate::source_file::SourceFile{contents: $source, filename: "test.lc"};
-        let preprocessed = $crate::lexer::token_buffer::TokenBuffer::from_source(source).unwrap();
-
-        let mut p = $crate::parser::Parser::new(preprocessed, &arena);
-        let e = p.expr().unwrap();
-
-        assert_matches!(e, $pattern $(if $guard)?)
-    }
-}
-
-macro_rules! assert_file_matches {
-    ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
-        let arena = ::bumpalo::Bump::new();
-
-        let source = $crate::source_file::SourceFile{contents: $source, filename: "test.lc"};
-        let preprocessed = $crate::lexer::token_buffer::TokenBuffer::from_source(source).unwrap();
-
-        let mut p = $crate::parser::Parser::new(preprocessed, &arena);
-
-        let e = p.file().unwrap();
-        assert_matches!(e, $pattern $(if $guard)?)
-    }
-}
-
 macro_rules! spanned {
     ($x:pat) => {
         $crate::parser::span::Spanned { value: $x, .. }

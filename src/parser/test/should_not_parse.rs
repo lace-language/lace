@@ -10,13 +10,12 @@ macro_rules! should_error_expr {
     (@$name: ident, $source: literal, $pattern: pat $(if $guard: expr)?) => {
         #[test]
         fn $name () {
-            let arena = ::bumpalo::Bump::new();
-            let source = $crate::source_file::SourceFile{contents: $source, filename: "test.lc"};
-            let preprocessed = $crate::lexer::token_buffer::TokenBuffer::from_source(source).unwrap();
-
-            let mut p = $crate::parser::Parser::new(preprocessed, &arena);
-
-            assert_matches!(p.expr(), $pattern $(if $guard)?)
+            $crate::parser::test::parse_test_helper::parse_expr_test(
+                $crate::source_file::SourceFile{contents: $source, filename: "test.lc"},
+                |expr| {
+                    assert_matches!(expr, $pattern $(if $guard)?)
+                }
+            )
         }
     };
 }
@@ -31,12 +30,12 @@ macro_rules! should_error_file {
     (@$name: ident, $source: literal, $pattern: pat $(if $guard: expr)?) => {
         #[test]
         fn $name () {
-            let arena = ::bumpalo::Bump::new();
-            let source = $crate::source_file::SourceFile{contents: $source, filename: "test.lc"};
-            let preprocessed = $crate::lexer::token_buffer::TokenBuffer::from_source(source).unwrap();
-
-            let p = $crate::parser::Parser::new(preprocessed, &arena);
-            assert_matches!(p.parse(), $pattern $(if $guard)?)
+            $crate::parser::test::parse_test_helper::parse_file_test(
+                $crate::source_file::SourceFile{contents: $source, filename: "test.lc"},
+                |file| {
+                    assert_matches!(file, $pattern $(if $guard)?)
+                }
+            )
         }
     };
 }

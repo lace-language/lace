@@ -1,5 +1,27 @@
 use crate::parser::ast::*;
 
+macro_rules! assert_expr_matches {
+    ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
+        $crate::parser::test::parse_test_helper::parse_expr_test(
+            $crate::source_file::SourceFile{contents: $source, filename: "test.lc"},
+            |expr| {
+                assert_matches!(expr.unwrap(), $pattern $(if $guard)?)
+            }
+        )
+    }
+}
+
+macro_rules! assert_file_matches {
+    ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
+        $crate::parser::test::parse_test_helper::parse_file_test(
+            $crate::source_file::SourceFile{contents: $source, filename: "test.lc"},
+            |file| {
+                assert_matches!(file.unwrap(), $pattern $(if $guard)?)
+            }
+        )
+    }
+}
+
 #[test]
 fn booleans() {
     assert_expr_matches!("false", bool!(false));
