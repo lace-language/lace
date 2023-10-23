@@ -2,3 +2,14 @@
 [workspace]
 members = ["crates/*"]
 default-members = ["crates/*"]
+resolver = "2"
+
+[workspace.dependencies]
+thiserror = "1.0"
+bumpalo = { version = "3.13", features = ["collections"] }
+clap = { version = "4.4", features = ["derive"] }
+logos = "0.13.0"
+miette = { version = "5.10.0", features = ["fancy"] }
+derive_more = "0.99.17"
+
+unionfind = {path="./crates/unionfind"}

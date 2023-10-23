@@ -7,4 +7,4 @@ A union find library made for building type inference engines. Can be used as ge
 
 # License
 
-This code is licensed under the [Apache 2.0 license](./LICENSE)
+This code is dually licensed under the Apache 2.0 and MIT licences
