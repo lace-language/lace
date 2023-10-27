@@ -1,4 +1,5 @@
 use crate::parser::span::Spanned;
+use derive_more::Display;
 
 pub type Expr<'s, 'a> = Spanned<ExprKind<'s, 'a>>;
 
@@ -13,23 +14,45 @@ pub enum ExprKind<'s, 'a> {
     ),
     Block(&'a Spanned<Block<'s, 'a>>),
     Ident(Spanned<Ident<'s>>),
-    Neg(&'a Spanned<Self>),
     Paren(&'a Spanned<Self>),
-    Mul(&'a Spanned<Self>, &'a Spanned<Self>),
-    Div(&'a Spanned<Self>, &'a Spanned<Self>),
-    Add(&'a Spanned<Self>, &'a Spanned<Self>),
-    Sub(&'a Spanned<Self>, &'a Spanned<Self>),
-    Not(&'a Spanned<Self>),
-    LogicalAnd(&'a Spanned<Self>, &'a Spanned<Self>),
-    LogicalOr(&'a Spanned<Self>, &'a Spanned<Self>),
+    BinaryOp(Spanned<BinaryOp>, &'a Spanned<Self>, &'a Spanned<Self>),
+    UnaryOp(Spanned<UnaryOp>, &'a Spanned<Self>),
     Tuple(&'a [Spanned<Self>]),
-    Gt(&'a Spanned<Self>, &'a Spanned<Self>),
-    Gte(&'a Spanned<Self>, &'a Spanned<Self>),
-    Lt(&'a Spanned<Self>, &'a Spanned<Self>),
-    Lte(&'a Spanned<Self>, &'a Spanned<Self>),
-    Eq(&'a Spanned<Self>, &'a Spanned<Self>),
-    Neq(&'a Spanned<Self>, &'a Spanned<Self>),
     Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
+pub enum BinaryOp {
+    #[display(fmt = "*")]
+    Mul,
+    #[display(fmt = "/")]
+    Div,
+    #[display(fmt = "+")]
+    Add,
+    #[display(fmt = "-")]
+    Sub,
+    #[display(fmt = "&&")]
+    LogicalAnd,
+    #[display(fmt = "||")]
+    LogicalOr,
+    #[display(fmt = ">")]
+    Gt,
+    #[display(fmt = ">=")]
+    Gte,
+    #[display(fmt = "<")]
+    Lt,
+    #[display(fmt = "<=")]
+    Lte,
+    #[display(fmt = "==")]
+    Eq,
+    #[display(fmt = "!=")]
+    Neq,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum UnaryOp {
+    Not,
+    Neg,
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -223,21 +223,8 @@ impl<'s, 'a> Graph {
                 }
             }
             ExprKind::Block(block) => self.block(scope, block),
-            ExprKind::Neg(expr) | ExprKind::Paren(expr) | ExprKind::Not(expr) => {
-                self.expr(scope, expr)
-            }
-            ExprKind::Mul(left, right)
-            | ExprKind::Div(left, right)
-            | ExprKind::Add(left, right)
-            | ExprKind::Sub(left, right)
-            | ExprKind::LogicalOr(left, right)
-            | ExprKind::LogicalAnd(left, right)
-            | ExprKind::Gt(left, right)
-            | ExprKind::Gte(left, right)
-            | ExprKind::Lt(left, right)
-            | ExprKind::Lte(left, right)
-            | ExprKind::Eq(left, right)
-            | ExprKind::Neq(left, right) => {
+            ExprKind::UnaryOp(_, expr) | ExprKind::Paren(expr) => self.expr(scope, expr),
+            ExprKind::BinaryOp(_, left, right) => {
                 self.expr(scope, left);
                 self.expr(scope, right);
             }

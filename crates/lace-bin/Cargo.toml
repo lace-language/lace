@@ -1,0 +1,16 @@
+[package]
+name = "lace-bin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bumpalo = { workspace = true }
+clap = { workspace = true }
+logos = { workspace = true }
+miette = { workspace = true }
+derive_more = { workspace = true }
+thiserror = { workspace = true }
+unionfind = { workspace = true }
+stack-graphs = { workspace = true }

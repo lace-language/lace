@@ -1,282 +1,25 @@
-use crate::lexer::token_buffer::TokenBuffer;
-use crate::parser::ast::{
-    Block, ExprKind, File, Function, Ident, Item, Lit, Parameter, Statement, TypeSpec,
-};
-use crate::parser::span::Spanned;
-use crate::parser::Parser;
-use crate::source_file::SourceFile;
-use bumpalo::Bump;
-
-macro_rules! assert_matches {
-    ($expression:expr, $pattern:pat $(if $guard:expr)? $(,)?) => {
-        match $expression {
-            $pattern $(if $guard)? => {}
-            outcome => assert!(false, "expected {:?} to match {}", outcome, stringify!($pattern $(if $guard)?))
-        }
-    };
-}
+use crate::parser::ast::*;
 
 macro_rules! assert_expr_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
-        let arena = Bump::new();
-
-        let source = SourceFile { contents: $source, filename: "test.lc" };
-        let preprocessed = TokenBuffer::from_source(source).unwrap();
-
-        let mut p = Parser::new(preprocessed, &arena);
-        let e = p.expr().unwrap();
-
-        assert_matches!(e, $pattern $(if $guard)?)
+        $crate::parser::test::parse_test_helper::parse_expr_test(
+            $crate::source_file::SourceFile{contents: $source, filename: "test.lc"},
+            |expr| {
+                assert_matches!(expr.unwrap(), $pattern $(if $guard)?)
+            }
+        )
     }
 }
 
 macro_rules! assert_file_matches {
     ($source:literal, $pattern:pat $(if $guard:expr)? $(,)?) => {
-        let arena = Bump::new();
-        let source = SourceFile { contents: $source, filename: "test.lc" };
-        let preprocessed = TokenBuffer::from_source(source).unwrap();
-
-        let mut p = Parser::new(preprocessed, &arena);
-
-        let e = p.file().unwrap();
-        assert_matches!(e, $pattern $(if $guard)?)
-    }
-}
-
-macro_rules! spanned {
-    ($x:pat) => {
-        Spanned { value: $x, .. }
-    };
-}
-
-macro_rules! int {
-    ($i:literal) => {
-        spanned!(ExprKind::Lit(Lit::Int(stringify!($i))))
-    };
-}
-
-macro_rules! string {
-    ($i:literal) => {
-        spanned!(ExprKind::Lit(Lit::String($i)))
-    };
-}
-
-macro_rules! ident_expr {
-    ($i:ident) => {
-        spanned!(ExprKind::Ident(spanned!(Ident {
-            string: stringify!($i),
-        })))
-    };
-}
-
-macro_rules! ident {
-    ($i:ident) => {
-        spanned!(Ident {
-            string: stringify!($i),
-        })
-    };
-}
-
-macro_rules! bool {
-    ($i:literal) => {
-        spanned!(ExprKind::Lit(Lit::Bool($i)))
-    };
-}
-
-macro_rules! neg {
-    ($x:pat) => {
-        spanned!(ExprKind::Neg($x))
-    };
-}
-
-macro_rules! not {
-    ($x:pat) => {
-        spanned!(ExprKind::Not($x))
-    };
-}
-
-macro_rules! and {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::LogicalAnd($x, $y))
-    };
-}
-
-macro_rules! or {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::LogicalOr($x, $y))
-    };
-}
-
-macro_rules! add {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Add($x, $y))
-    };
-}
-
-macro_rules! sub {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Sub($x, $y))
-    };
-}
-
-macro_rules! mul {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Mul($x, $y))
-    };
-}
-
-macro_rules! div {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Div($x, $y))
-    };
-}
-
-macro_rules! gt {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Gt($x, $y))
-    };
-}
-
-macro_rules! gte {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Gte($x, $y))
-    };
-}
-
-macro_rules! lt {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Lt($x, $y))
-    };
-}
-
-macro_rules! lte {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Lte($x, $y))
-    };
-}
-
-macro_rules! eq {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Eq($x, $y))
-    };
-}
-
-macro_rules! neq {
-    ($x:pat, $y:pat) => {
-        spanned!(ExprKind::Neq($x, $y))
-    };
-}
-
-macro_rules! paren {
-    ($x:pat) => {
-        spanned!(ExprKind::Paren($x))
-    };
-}
-
-macro_rules! tuple {
-    ($($x:pat),*) => {
-        spanned!(ExprKind::Tuple(&[$($x),*]))
-    };
-}
-
-macro_rules! stmt {
-    (let: $x:ident, $ty: pat, $exp:pat) => {
-        Statement::Let(
-            spanned!(Ident {
-                string: stringify!($x),
-            }),
-            Some($ty),
-            $exp,
+        $crate::parser::test::parse_test_helper::parse_file_test(
+            $crate::source_file::SourceFile{contents: $source, filename: "test.lc"},
+            |file| {
+                assert_matches!(file.unwrap(), $pattern $(if $guard)?)
+            }
         )
-    };
-    (let: $x:ident, $exp:pat) => {
-        Statement::Let(
-            spanned!(Ident {
-                string: stringify!($x),
-            }),
-            None,
-            $exp,
-        )
-    };
-    ($x:pat) => {
-        Statement::Expr($x)
-    };
-}
-
-macro_rules! call {
-    ($callee: pat => [$($arg: pat),*]) => {
-        spanned!(ExprKind::Call($callee, spanned!(&[$($arg),*])))
-    };
-}
-
-macro_rules! block {
-    ($($stmts:pat),*) => {
-        spanned!(Block { stmts: &[$($stmts),*], last: None, .. })
-    };
-    ($($stmts:pat),* => $exp:pat) => {
-        spanned!(Block { stmts: &[$($stmts),*], last: Some($exp), .. })
-    };
-}
-
-macro_rules! file {
-    ($($items:pat),*) => {
-        File {
-            items: &[$($items),*]
-        }
-    };
-}
-
-macro_rules! item {
-    (func: $pat: pat) => {
-        Item::Function(spanned!($pat))
-    };
-}
-
-macro_rules! type_spec {
-    (name: $name: ident) => {
-        spanned!(TypeSpec::Name(ident!($name)))
-    };
-}
-
-macro_rules! function {
-    (fn $name: ident ($($arg:ident:$ty:pat),*) -> $ret:pat => $block: pat) => {
-        Function {
-            name: ident!($name),
-            parameters: &[$(Parameter {
-                name: ident!($arg),
-                type_spec: $ty,
-            }),*],
-            ret: Some($ret),
-            block: $block,
-        }
-    };
-
-    (fn $name: ident ($($arg:ident:$ty:pat),*) => $block: pat) => {
-        Function {
-            name: ident!($name),
-            parameters: &[$(Parameter {
-                name: ident!($arg),
-                type_spec: $ty,
-            }),*],
-            ret: None,
-            block: $block,
-        }
-    };
-}
-
-macro_rules! block_expr {
-    ($($tok:tt)*) =>  {
-        spanned!(ExprKind::Block(block!{$($tok)*}))
     }
-}
-
-macro_rules! if_ {
-    ($cond:pat, $then:pat) => {
-        spanned!(ExprKind::If($cond, $then, None))
-    };
-    ($cond:pat, $then:pat, $else:pat) => {
-        spanned!(ExprKind::If($cond, $then, Some($else)))
-    };
 }
 
 #[test]
@@ -296,6 +39,8 @@ fn integers() {
 #[test]
 fn unary() {
     assert_expr_matches!("- 2", neg!(int!(2)));
+    assert_expr_matches!("-- 2", neg!(neg!(int!(2))));
+    assert_expr_matches!("- 2 + 3", add!(neg!(int!(2)), int!(3)));
 }
 
 #[test]
@@ -324,6 +69,12 @@ fn logical() {
         "true || !false && false",
         or!(bool!(true), and!(not!(bool!(false)), bool!(false)))
     );
+}
+
+#[test]
+fn inversion_and_arithmetic() {
+    assert_expr_matches!("!false + false", add!(not!(bool!(false)), bool!(false)));
+    assert_expr_matches!("!false - false", sub!(not!(bool!(false)), bool!(false)));
 }
 
 #[test]
@@ -448,6 +199,11 @@ fn strings() {
 #[test]
 fn call() {
     assert_expr_matches!("a()", call!(ident_expr!(a) => []));
+    assert_expr_matches!(
+        "a(1)(2)",
+        call!(call!(ident_expr!(a) => [int!(1)]) => [int!(2)])
+    );
+    assert_expr_matches!("-a(1)", neg!(call!(ident_expr!(a) => [int!(1)])));
     assert_expr_matches!(
         "a(1, 2, 3)",
         call!(
