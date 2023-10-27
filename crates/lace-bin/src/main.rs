@@ -4,7 +4,8 @@
 mod ice;
 mod error;
 mod lexer;
-mod nameres;
+mod name_resolution;
+mod typechecking;
 mod parser;
 mod source_file;
 
@@ -32,7 +33,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     let (spans, ast) = parser.parse()?;
 
     // Name resolution
-    let mut graph = nameres::Graph::new(source.filename);
+    let mut graph = name_resolution::Graph::new(source.filename);
     let resolved = graph.resolve(&ast);
 
     // For debugging:

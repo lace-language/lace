@@ -1,6 +1,6 @@
 use crate::error::ResultExt;
 use crate::lexer::token_buffer::TokenBuffer;
-use crate::nameres;
+use crate::name_resolution;
 use crate::parser::Parser;
 use crate::source_file::SourceFile;
 use bumpalo::Bump;
@@ -26,7 +26,7 @@ macro_rules! parse {
 fn test_no_nameres() {
     parse!(let (_spans, ast, source) = "fn main(){}");
 
-    let mut graph = nameres::Graph::new(source.filename);
+    let mut graph = name_resolution::Graph::new(source.filename);
     let resolved = graph.resolve(&ast);
     assert!(resolved.is_empty())
 }
@@ -35,7 +35,7 @@ fn test_no_nameres() {
 fn test_recursive() {
     parse!(let (spans, ast, source) = "fn main(){main();}");
 
-    let mut graph = nameres::Graph::new(source.filename);
+    let mut graph = name_resolution::Graph::new(source.filename);
     let resolved = graph.resolve(&ast);
 
     assert_eq!(resolved.len(), 1);
