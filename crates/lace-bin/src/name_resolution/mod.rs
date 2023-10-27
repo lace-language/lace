@@ -16,6 +16,10 @@ use stack_graphs::{
 #[cfg(test)]
 mod tests;
 
+pub struct NameResolutions {
+    pub(crate) names: Vec<(NodeId, NodeId)>
+}
+
 pub struct Graph {
     /// The stack graph for this file
     graph: StackGraph,
@@ -93,7 +97,7 @@ impl<'s, 'a> Graph {
     }
 
     /// Resolve all names in the AST of a file.
-    pub fn resolve(&mut self, ast: &File<'s, 'a>) -> Vec<(NodeId, NodeId)> {
+    pub fn resolve(&mut self, ast: &File<'s, 'a>) -> NameResolutions {
         let root = StackGraph::root_node();
 
         let module_scope = self.new_scope(false);
@@ -147,7 +151,9 @@ impl<'s, 'a> Graph {
             }
         }
 
-        no_shadow_results
+        NameResolutions {
+            names: no_shadow_results,
+        }
     }
 
     fn item(&mut self, module: Handle<Node>, item: &Item<'s, 'a>) {

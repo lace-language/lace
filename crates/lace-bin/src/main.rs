@@ -40,12 +40,12 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     // For debugging:
     graph.print();
 
-    eprintln!("resolved {}", resolved.len());
-    for (from, to) in resolved {
+    eprintln!("resolved {}", !resolved.names.len());
+    for (from, to) in &resolved.names {
         let report = miette::miette!(
             labels = vec![
-                LabeledSpan::at(spans.get(from), "reference"),
-                LabeledSpan::at(spans.get(to), "definition"),
+                LabeledSpan::at(spans.get(*from), "reference"),
+                LabeledSpan::at(spans.get(*to), "definition"),
             ],
             "resolved"
         )
@@ -54,7 +54,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     }
 
     let type_arena = Bump::new();
-    let _types = typecheck(&ast, &type_arena);
+    let _types = typecheck(&ast, &resolved, &type_arena);
 
     Ok(ast)
 }
