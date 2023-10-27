@@ -31,6 +31,15 @@ impl<'a> TypeContext<'a> {
         match self.name_mapping.entry(node_id) {
             Entry::Occupied(o) => *o.get(),
             Entry::Vacant(v) => {
+
+                // since all names should have been added during constraint generation
+                // through `type_of_name`, we should not actually ever get here.
+                // if we do, nameres found identifiers we haven't which is bad.
+                // This assumption is only true if we run `add_name_resolutions`
+                // after constraint generation like `typecheck` does
+                assert!(false, "should not get here if name resolution matches typechecking");
+
+                // this is the implementation if we didn't panic above
                 let variable = self.variable_generator.next();
                 *v.insert(variable)
             }
@@ -60,7 +69,7 @@ impl<'a> TypeContext<'a> {
         self.constraints.push(Constraint::Equal(a, b));
     }
 
-    pub fn type_of_ident(&self, _ident: &Spanned<Ident>) -> TypeOrVariable<'a> {
-        todo!()
+    pub fn type_of_name(&mut self, ident: &Spanned<Ident>) -> TypeOrVariable<'a> {
+        self.get_or_insert_name_mapping(ident.span).into()
     }
 }

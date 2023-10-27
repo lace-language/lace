@@ -31,7 +31,7 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
                 b.generate_constraints(ctx)
             }
             ExprKind::Ident(i) => {
-                ctx.type_of_ident(i)
+                ctx.type_of_name(i)
             }
             ExprKind::Paren(expr) => {
                 expr.generate_constraints(ctx)
@@ -158,7 +158,7 @@ impl<'a> TypeConstraintGenerator<'a> for Statement<'_, '_> {
             Statement::Let(name, type_spec, value) => {
                 let value_type = value.generate_constraints(ctx);
 
-                let name_ty = ctx.type_of_ident(name);
+                let name_ty = ctx.type_of_name(name);
                 ctx.add_equal_constraint(name_ty, value_type);
 
                 if let Some(spec) = type_spec {
@@ -218,7 +218,7 @@ impl<'a> TypeConstraintGenerator<'a> for Spanned<Function<'_, '_>> {
         for i in *parameters {
             let Parameter { name, type_spec } = i;
 
-            let param_ty = ctx.type_of_ident(name);
+            let param_ty = ctx.type_of_name(name);
             let spec_ty = type_spec.generate_constraints(ctx);
 
             ctx.add_equal_constraint(param_ty, spec_ty);
@@ -238,7 +238,7 @@ impl<'a> TypeConstraintGenerator<'a> for Spanned<Function<'_, '_>> {
         let function_type = PartialType::Function { params: &[], ret: ctx.alloc(ret_ty_spec) };
 
         // the function name has this type
-        let name = ctx.type_of_ident(name);
+        let name = ctx.type_of_name(name);
         ctx.add_equal_constraint(name, function_type);
 
         // and the block should return this type
