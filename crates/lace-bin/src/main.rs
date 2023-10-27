@@ -18,6 +18,7 @@ use lexer::token_buffer::TokenBuffer;
 use miette::LabeledSpan;
 use miette::Report;
 use parser::Parser;
+use crate::typechecking::typecheck;
 
 #[derive(ClapParser)]
 #[command(author, version, about, long_about = None)]
@@ -51,6 +52,9 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
         .with_source_code(source.named_source());
         eprintln!("{:?}", report);
     }
+
+    let type_arena = Bump::new();
+    let _types = typecheck(&ast, &type_arena);
 
     Ok(ast)
 }
