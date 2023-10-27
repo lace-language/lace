@@ -13,7 +13,7 @@ pub enum ExprKind<'s, 'a> {
         Option<&'a Spanned<Block<'s, 'a>>>,
     ),
     Block(&'a Spanned<Block<'s, 'a>>),
-    Ident(Ident<'s>),
+    Ident(Spanned<Ident<'s>>),
     Paren(&'a Spanned<Self>),
     BinaryOp(Spanned<BinaryOp>, &'a Spanned<Self>, &'a Spanned<Self>),
     UnaryOp(Spanned<UnaryOp>, &'a Spanned<Self>),

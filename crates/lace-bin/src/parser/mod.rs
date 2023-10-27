@@ -1,6 +1,6 @@
 use crate::lexer::token::Token;
 use crate::lexer::token_buffer::TokenBuffer;
-use crate::parser::ast::File;
+use crate::parser::ast::Ast;
 use crate::parser::span::{Span, Spans};
 use bumpalo::Bump;
 use error::{ParseError, ParseResult};
@@ -39,8 +39,9 @@ impl<'s, 'a> Parser<'s, 'a> {
         self.token_buffer.next().ok_or(ParseError::EndOfInput)
     }
 
-    pub fn parse(mut self) -> ParseResult<File<'s, 'a>> {
-        self.file()
+    pub fn parse(mut self) -> ParseResult<(Spans, Ast<'s, 'a>)> {
+        let ast = self.file()?;
+        Ok((self.spans, ast))
     }
 
     fn alloc<T>(&mut self, x: T) -> &'a T {

@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NodeId(usize);
 
 pub struct Spans(Vec<Span>);
@@ -40,8 +40,8 @@ impl Spans {
         self.store(span.merge(&a))
     }
 
-    pub fn get(&self, NodeId(index): NodeId) -> Span {
-        self.0[index]
+    pub fn get(&self, NodeId(id): NodeId) -> Span {
+        self.0[id]
     }
 }
 

@@ -11,5 +11,6 @@ clap = { version = "4.4", features = ["derive"] }
 logos = "0.13.0"
 miette = { version = "5.10.0", features = ["fancy"] }
 derive_more = "0.99.17"
-
+stack-graphs = { version = "0.12.0", features = ["visualization"] }
 unionfind = {path="./crates/unionfind"}
+

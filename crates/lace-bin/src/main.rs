@@ -4,6 +4,7 @@
 mod ice;
 mod error;
 mod lexer;
+mod nameres;
 mod parser;
 mod source_file;
 
@@ -13,6 +14,7 @@ use crate::source_file::SourceFile;
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
 use lexer::token_buffer::TokenBuffer;
+use miette::LabeledSpan;
 use miette::Report;
 use parser::Parser;
 
@@ -25,8 +27,29 @@ struct Options {
 fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a>, CompilerError> {
     let token_buffer = TokenBuffer::from_source(source)?;
 
+    // Parsing
     let parser = Parser::new(token_buffer, arena);
-    let ast = parser.parse()?;
+    let (spans, ast) = parser.parse()?;
+
+    // Name resolution
+    let mut graph = nameres::Graph::new(source.filename);
+    let resolved = graph.resolve(&ast);
+
+    // For debugging:
+    graph.print();
+
+    eprintln!("resolved {}", resolved.len());
+    for (from, to) in resolved {
+        let report = miette::miette!(
+            labels = vec![
+                LabeledSpan::at(spans.get(from), "reference"),
+                LabeledSpan::at(spans.get(to), "definition"),
+            ],
+            "resolved"
+        )
+        .with_source_code(source.named_source());
+        eprintln!("{:?}", report);
+    }
 
     Ok(ast)
 }

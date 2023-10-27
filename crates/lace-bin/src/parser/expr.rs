@@ -162,7 +162,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         let (token, raw_span) = self.next()?;
         let span = self.spans.store(raw_span);
         let expr = match token {
-            Token::Ident(s) => ExprKind::Ident(Ident { string: s }).with_span(span),
+            Token::Ident(s) => ExprKind::Ident(Ident { string: s }.with_span(span)).with_span(span),
             Token::False => ExprKind::Lit(Lit::Bool(false)).with_span(span),
             Token::True => ExprKind::Lit(Lit::Bool(true)).with_span(span),
             Token::String(s) => ExprKind::Lit(Lit::String(s)).with_span(span),
