@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 
 /// Used after type checking, contains no unresolved types
 #[derive(Copy, Clone)]
@@ -10,6 +11,46 @@ pub enum Type<'a> {
     },
     Tuple(&'a [Type<'a>]),
     String,
+}
+
+impl Display for Type<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Int => write!(f, "int"),
+            Type::Bool => write!(f, "bool"),
+            Type::Function { params, ret } => {
+                write!(f, "fn (")?;
+                if let Some((last, rest)) = params.split_last() {
+                    for i in rest {
+                        write!(f, "{i},")?;
+                    }
+
+                    write!(f, "{last}")?;
+                    if rest.len() == 0 {
+                        write!(f, ",")?;
+                    }
+                }
+
+                write!(f, ") -> {ret}")
+            }
+            Type::Tuple(t) => {
+                write!(f, "(")?;
+                if let Some((last, rest)) = t.split_last() {
+                    for i in rest {
+                        write!(f, "{},", i)?;
+                    }
+
+                    write!(f, "{}", last)?;
+                    if rest.len() == 0 {
+                        write!(f, ",")?;
+                    }
+                }
+
+                write!(f, ")")
+            },
+            Type::String => write!(f, "string"),
+        }
+    }
 }
 
 /// Used during type checking, contains unresolved types (type variables)

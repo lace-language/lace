@@ -14,8 +14,6 @@ impl<'s> SourceFile<'s> {
     }
 
     pub fn slice_span(&self, span: Span) -> &'s str {
-        println!("{:?}", span);
-
         let mut res = self.contents
             .char_indices()
             .skip(span.offset())

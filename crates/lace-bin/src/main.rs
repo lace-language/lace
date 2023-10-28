@@ -18,9 +18,10 @@ use crate::typechecking::typecheck;
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
 use lexer::token_buffer::TokenBuffer;
-use miette::LabeledSpan;
+use miette::{LabeledSpan, Severity};
 use miette::Report;
 use parser::Parser;
+use crate::ice::Ice;
 
 #[derive(ClapParser)]
 #[command(author, version, about, long_about = None)]
@@ -42,22 +43,29 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     // For debugging:
     graph.save_debug();
 
-    eprintln!("resolved {}", !resolved.names.len());
+
+
+    let type_arena = Bump::new();
+    let types = typecheck(&ast, &resolved, &spans, source, &type_arena)?;
+
+    let disp_arena = Bump::new();
+    eprintln!("resolved {} references", resolved.names.len());
     for (from, to) in &resolved.names {
+        let ty = types.type_of_name(*from, &disp_arena)
+            .unwrap_or_ice("all names should have been typechecked");
+
         let report = miette::miette!(
             labels = vec![
                 LabeledSpan::at(spans.get(*from), "reference"),
                 LabeledSpan::at(spans.get(*to), "definition"),
             ],
+            help = format!("type is {}", ty),
+            severity = Severity::Advice,
             "resolved"
         )
-        .with_source_code(source.named_source());
+            .with_source_code(source.named_source());
         eprintln!("{:?}", report);
     }
-
-    let type_arena = Bump::new();
-    let _types = typecheck(&ast, &resolved, &spans, source, &type_arena);
-
     Ok(ast)
 }
 

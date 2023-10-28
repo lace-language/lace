@@ -14,7 +14,12 @@ use crate::syntax_id::{NodeId, Identified};
 use std::io::Write;
 use crate::debug_file::create_debug_file;
 
+// TODO: replace with FxHashMap
+/// Maps concrete types to type variables
 pub type TypeMapping<'a> = HashMap<TypeVariable, ConcreteType<'a>>;
+// TODO: replace with FxHashMap
+/// Maps identifiers from the source code to type variables
+pub type NameMapping = HashMap<NodeId, TypeVariable>;
 
 pub struct TypeContext<'a> {
     /// Stores arrays of type variables needed for some concrete types,
@@ -29,10 +34,8 @@ pub struct TypeContext<'a> {
     pub constraints: Vec<Constraint>,
 
     /// Stores a mapping from identifiers to type variables
-    // TODO: replace with FxHashMap
-    pub name_mapping: HashMap<NodeId, TypeVariable>,
+    pub name_mapping: NameMapping,
     /// Stores a mapping from type variables to concrete types
-    // TODO: replace with FxHashMap
     pub type_mapping: TypeMapping<'a>,
 }
 
@@ -133,13 +136,26 @@ impl<'a> TypeContext<'a> {
             .map(|(a, b)| (b, a))
             .collect::<HashMap<_, _>>();
 
+        writeln!(f, "constraints:").unwrap();
         for Constraint::Equal(a, b) in &self.constraints {
             writeln!(
                 f,
-                "{} == {}",
+                "{: >40} == {:<40}       {} == {}",
                 self.name_of_type_var(&inverse_name_mapping, spans, source, *a),
-                self.name_of_type_var(&inverse_name_mapping, spans, source, *b)
+                self.name_of_type_var(&inverse_name_mapping, spans, source, *b),
+                a.as_usize(),
+                b.as_usize(),
             ).unwrap()
+        }
+
+        for _ in 0..5 {
+            writeln!(f).unwrap();
+        }
+
+        writeln!(f, "concrete types variables:").unwrap();
+        for (tv, _) in &self.type_mapping {
+            let name = self.name_of_type_var(&inverse_name_mapping, spans, source, *tv);
+            writeln!(f, "tv {} ==> {name}", tv.as_usize()).unwrap();
         }
     }
 }
