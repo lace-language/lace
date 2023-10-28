@@ -1,7 +1,7 @@
 #![allow(clippy::module_inception)]
 
 #[macro_use]
-mod ice;
+mod lice;
 mod error;
 mod lexer;
 mod name_resolution;
@@ -21,7 +21,7 @@ use lexer::token_buffer::TokenBuffer;
 use miette::{LabeledSpan, Severity};
 use miette::Report;
 use parser::Parser;
-use crate::ice::Ice;
+use crate::lice::Lice;
 
 #[derive(ClapParser)]
 #[command(author, version, about, long_about = None)]
@@ -52,7 +52,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     eprintln!("resolved {} references", resolved.names.len());
     for (from, to) in &resolved.names {
         let ty = types.type_of_name(*from, &disp_arena)
-            .unwrap_or_ice("all names should have been typechecked");
+            .unwrap_or_lice("all names should have been typechecked");
 
         let report = miette::miette!(
             labels = vec![

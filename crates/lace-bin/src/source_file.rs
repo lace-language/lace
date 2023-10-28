@@ -1,5 +1,5 @@
 use miette::NamedSource;
-use crate::ice::Ice;
+use crate::lice::Lice;
 use crate::parser::span::Span;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -19,12 +19,12 @@ impl<'s> SourceFile<'s> {
             .skip(span.offset())
             .take(span.length());
 
-        let (start, c) = res.next().unwrap_or_ice("span start not within source");
+        let (start, c) = res.next().unwrap_or_lice("span start not within source");
         match span.length() {
             0 => "",
             1 => &self.contents[start..start+c.len_utf8()],
             _ => {
-                let (end, last) = res.last().unwrap_or_ice("span end not within source");
+                let (end, last) = res.last().unwrap_or_lice("span end not within source");
                 &self.contents[start..end+last.len_utf8()]
             }
         }
