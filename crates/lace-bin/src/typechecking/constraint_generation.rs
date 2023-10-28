@@ -95,7 +95,7 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
                     param_types.push(i.generate_constraints(ctx));
                 }
 
-                let ret_ty = ctx.fresh().into();
+                let ret_ty = ctx.fresh();
 
                 let expected_f_ty = ConcreteType::Function {
                     params: param_types.into_bump_slice(),

@@ -2,26 +2,26 @@
 
 #[macro_use]
 mod lice;
+mod debug_file;
 mod error;
 mod lexer;
 mod name_resolution;
 mod parser;
 mod source_file;
-mod typechecking;
 mod syntax_id;
-mod debug_file;
+mod typechecking;
 
 use crate::error::{CompilerError, ResultExt};
+use crate::lice::Lice;
 use crate::parser::ast::Ast;
 use crate::source_file::SourceFile;
 use crate::typechecking::typecheck;
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
 use lexer::token_buffer::TokenBuffer;
-use miette::{LabeledSpan, Severity};
 use miette::Report;
+use miette::{LabeledSpan, Severity};
 use parser::Parser;
-use crate::lice::Lice;
 
 #[derive(ClapParser)]
 #[command(author, version, about, long_about = None)]
@@ -43,15 +43,14 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     // For debugging:
     graph.save_debug();
 
-
-
     let type_arena = Bump::new();
     let types = typecheck(&ast, &resolved, &spans, source, &type_arena)?;
 
     let disp_arena = Bump::new();
     eprintln!("resolved {} references", resolved.names.len());
     for (from, to) in &resolved.names {
-        let ty = types.type_of_name(*from, &disp_arena)
+        let ty = types
+            .type_of_name(*from, &disp_arena)
             .unwrap_or_lice("all names should have been typechecked");
 
         let report = miette::miette!(
@@ -63,7 +62,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
             severity = Severity::Advice,
             "resolved"
         )
-            .with_source_code(source.named_source());
+        .with_source_code(source.named_source());
         eprintln!("{:?}", report);
     }
     Ok(ast)

@@ -2,8 +2,8 @@ use crate::lexer::token::Token;
 use crate::parser::ast::{Function, Parameter};
 use crate::parser::error::ParseResult;
 use crate::parser::Parser;
-use bumpalo::collections::Vec;
 use crate::syntax_id::{Identified, WithNodeId};
+use bumpalo::collections::Vec;
 
 impl<'s, 'a> Parser<'s, 'a> {
     fn parse_parameter(&mut self) -> ParseResult<Parameter<'s>> {

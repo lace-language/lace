@@ -1,20 +1,17 @@
 use std::io::Write;
-use std::path::Path;
-use std::{collections::BTreeMap, fs, ops::Deref};
+use std::{collections::BTreeMap, ops::Deref};
 
-use crate::parser::{
-    ast::{Block, Expr, ExprKind, File, Ident, Item, Statement},
-};
+use crate::debug_file::create_debug_file;
+use crate::parser::ast::{Block, Expr, ExprKind, File, Ident, Item, Statement};
+use crate::syntax_id::{Identified, NodeId};
 use stack_graphs::{
     arena::Handle,
     graph::{Node, NodeID as GraphId, StackGraph, Symbol},
-    NoCancellation,
     partial::{PartialPath, PartialPaths},
     serde::NoFilter,
     stitching::{Database, ForwardPartialPathStitcher, GraphEdges},
+    NoCancellation,
 };
-use crate::debug_file::create_debug_file;
-use crate::syntax_id::{NodeId, Identified};
 
 #[cfg(test)]
 mod tests;

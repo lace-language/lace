@@ -1,9 +1,9 @@
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::source_file::SourceFile;
+use crate::typechecking::error::TypeError;
 use miette::{Diagnostic, Report};
 use thiserror::Error;
-use crate::typechecking::error::TypeError;
 
 /// The toplevel compiler error enum. This is what all errors finally turn in to, usually
 /// with transparent wrappers to an actual Diagnostic.

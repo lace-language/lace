@@ -1,4 +1,4 @@
-use crate::syntax_id::{NodeId, Identified};
+use crate::syntax_id::{Identified, NodeId};
 
 pub struct Spans(Vec<Span>);
 

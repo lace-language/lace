@@ -26,7 +26,7 @@ impl Display for Type<'_> {
                     }
 
                     write!(f, "{last}")?;
-                    if rest.len() == 0 {
+                    if rest.is_empty() {
                         write!(f, ",")?;
                     }
                 }
@@ -41,13 +41,13 @@ impl Display for Type<'_> {
                     }
 
                     write!(f, "{}", last)?;
-                    if rest.len() == 0 {
+                    if rest.is_empty() {
                         write!(f, ",")?;
                     }
                 }
 
                 write!(f, ")")
-            },
+            }
             Type::String => write!(f, "string"),
         }
     }

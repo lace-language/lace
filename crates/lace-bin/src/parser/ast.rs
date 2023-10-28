@@ -15,7 +15,11 @@ pub enum ExprKind<'s, 'a> {
     Block(&'a Identified<Block<'s, 'a>>),
     Ident(Identified<Ident<'s>>),
     Paren(&'a Identified<Self>),
-    BinaryOp(Identified<BinaryOp>, &'a Identified<Self>, &'a Identified<Self>),
+    BinaryOp(
+        Identified<BinaryOp>,
+        &'a Identified<Self>,
+        &'a Identified<Self>,
+    ),
     UnaryOp(Identified<UnaryOp>, &'a Identified<Self>),
     Tuple(&'a [Identified<Self>]),
     Call(&'a Identified<Self>, Identified<&'a [Identified<Self>]>),

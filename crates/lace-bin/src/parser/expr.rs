@@ -3,8 +3,8 @@ use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
 use crate::parser::precedence::Compatibility;
 use crate::parser::Parser;
-use bumpalo::collections::Vec;
 use crate::syntax_id::{Identified, WithNodeId};
+use bumpalo::collections::Vec;
 
 use super::ast::{BinaryOp, UnaryOp};
 
@@ -97,7 +97,10 @@ impl<'s, 'a> Parser<'s, 'a> {
             let operator_span = self.spans.store(span);
             let arg = self.unary()?;
             let span = self.spans.store_merged(span, &arg);
-            Ok(ExprKind::UnaryOp(op.with_node_id(operator_span), self.alloc(arg)).with_node_id(span))
+            Ok(
+                ExprKind::UnaryOp(op.with_node_id(operator_span), self.alloc(arg))
+                    .with_node_id(span),
+            )
         } else {
             self.call_expr()
         }
@@ -162,7 +165,9 @@ impl<'s, 'a> Parser<'s, 'a> {
         let (token, raw_span) = self.next()?;
         let span = self.spans.store(raw_span);
         let expr = match token {
-            Token::Ident(s) => ExprKind::Ident(Ident { string: s }.with_node_id(span)).with_node_id(span),
+            Token::Ident(s) => {
+                ExprKind::Ident(Ident { string: s }.with_node_id(span)).with_node_id(span)
+            }
             Token::False => ExprKind::Lit(Lit::Bool(false)).with_node_id(span),
             Token::True => ExprKind::Lit(Lit::Bool(true)).with_node_id(span),
             Token::String(s) => ExprKind::Lit(Lit::String(s)).with_node_id(span),
@@ -216,9 +221,8 @@ impl<'s, 'a> Parser<'s, 'a> {
         while self.accept_optional(tok![,])?.is_some() {
             if let Some(end_span) = self.accept_optional(Token::RoundRight)? {
                 let slice = vec.into_bump_slice();
-                return Ok(
-                    ExprKind::Tuple(slice).with_node_id(self.spans.store(start_span.merge(&end_span)))
-                );
+                return Ok(ExprKind::Tuple(slice)
+                    .with_node_id(self.spans.store(start_span.merge(&end_span))));
             }
             vec.push(self.expr()?);
         }

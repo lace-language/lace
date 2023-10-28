@@ -52,7 +52,11 @@ macro_rules! not {
 
 macro_rules! and {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::LogicalAnd), $x, $y))
+        identified!(ExprKind::BinaryOp(
+            identified!(BinaryOp::LogicalAnd),
+            $x,
+            $y
+        ))
     };
 }
 

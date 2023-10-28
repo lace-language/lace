@@ -1,6 +1,6 @@
+use crate::lice::Lice;
 use std::fs::File;
 use std::path::Path;
-use crate::lice::Lice;
 
 pub fn create_debug_file(name: &str) -> File {
     let path = Path::new("debug_output");

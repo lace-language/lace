@@ -11,7 +11,10 @@ pub trait WithNodeId {
 
 impl<T> WithNodeId for T {
     fn with_node_id(self, node_id: NodeId) -> Identified<Self> {
-        Identified { node_id, value: self }
+        Identified {
+            node_id,
+            value: self,
+        }
     }
 }
 

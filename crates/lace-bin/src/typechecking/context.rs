@@ -1,18 +1,17 @@
+use crate::debug_file::create_debug_file;
 use crate::name_resolution::NameResolutions;
 use crate::parser::ast::Ident;
+use crate::parser::span::Spans;
+use crate::source_file::SourceFile;
+use crate::syntax_id::{Identified, NodeId};
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::ty::TypeVariableGenerator;
 use crate::typechecking::ty::{ConcreteType, TypeVariable};
 use bumpalo::Bump;
+use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fs;
-use itertools::Itertools;
-use crate::parser::span::Spans;
-use crate::source_file::SourceFile;
-use crate::syntax_id::{NodeId, Identified};
 use std::io::Write;
-use crate::debug_file::create_debug_file;
 
 // TODO: replace with FxHashMap
 /// Maps concrete types to type variables
@@ -100,19 +99,20 @@ impl<'a> TypeContext<'a> {
         inverse_name_mapping: &HashMap<&TypeVariable, &NodeId>,
         spans: &Spans,
         source: SourceFile,
-        var: TypeVariable
+        var: TypeVariable,
     ) -> String {
         if let Some(i) = inverse_name_mapping.get(&var) {
             let span = spans.get(**i);
             format!("variable {}", source.slice_span(span))
         } else if let Some(i) = self.type_mapping.get(&var) {
             match i {
-                ConcreteType::Int => format!("int"),
-                ConcreteType::Bool => format!("bool"),
+                ConcreteType::Int => "int".to_string(),
+                ConcreteType::Bool => "bool".to_string(),
                 ConcreteType::Function { params, ret } => format!(
                     "fn ({}) -> {}",
-                    params.iter()
-                        .map(|v| self.name_of_type_var(inverse_name_mapping, spans, source,*v))
+                    params
+                        .iter()
+                        .map(|v| self.name_of_type_var(inverse_name_mapping, spans, source, *v))
                         .join(", "),
                     self.name_of_type_var(inverse_name_mapping, spans, source, **ret)
                 ),
@@ -122,7 +122,7 @@ impl<'a> TypeContext<'a> {
                         .map(|v| self.name_of_type_var(inverse_name_mapping, spans, source, *v))
                         .join(", ")
                 ),
-                ConcreteType::String => format!("string"),
+                ConcreteType::String => "string".to_string(),
             }
         } else {
             format!("type variable {}", var.as_usize())
@@ -131,7 +131,8 @@ impl<'a> TypeContext<'a> {
 
     pub fn save_debug(&self, spans: &Spans, source: SourceFile) {
         let mut f = create_debug_file("type-constraints");
-        let inverse_name_mapping = self.name_mapping
+        let inverse_name_mapping = self
+            .name_mapping
             .iter()
             .map(|(a, b)| (b, a))
             .collect::<HashMap<_, _>>();
@@ -145,7 +146,8 @@ impl<'a> TypeContext<'a> {
                 self.name_of_type_var(&inverse_name_mapping, spans, source, *b),
                 a.as_usize(),
                 b.as_usize(),
-            ).unwrap()
+            )
+            .unwrap()
         }
 
         for _ in 0..5 {
@@ -153,7 +155,7 @@ impl<'a> TypeContext<'a> {
         }
 
         writeln!(f, "concrete types variables:").unwrap();
-        for (tv, _) in &self.type_mapping {
+        for tv in self.type_mapping.keys() {
             let name = self.name_of_type_var(&inverse_name_mapping, spans, source, *tv);
             writeln!(f, "tv {} ==> {name}", tv.as_usize()).unwrap();
         }

@@ -1,8 +1,8 @@
 use crate::lexer::token::Token;
 use crate::parser::ast::{Block, Expr, ExprKind, Statement};
 use crate::parser::error::ParseResult;
-use crate::syntax_id::WithNodeId;
 use crate::parser::Parser;
+use crate::syntax_id::WithNodeId;
 use bumpalo::collections::Vec;
 
 use crate::syntax_id::Identified;

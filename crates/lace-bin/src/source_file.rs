@@ -1,6 +1,6 @@
-use miette::NamedSource;
 use crate::lice::Lice;
 use crate::parser::span::Span;
+use miette::NamedSource;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct SourceFile<'s> {
@@ -14,7 +14,8 @@ impl<'s> SourceFile<'s> {
     }
 
     pub fn slice_span(&self, span: Span) -> &'s str {
-        let mut res = self.contents
+        let mut res = self
+            .contents
             .char_indices()
             .skip(span.offset())
             .take(span.length());
@@ -22,10 +23,10 @@ impl<'s> SourceFile<'s> {
         let (start, c) = res.next().unwrap_or_lice("span start not within source");
         match span.length() {
             0 => "",
-            1 => &self.contents[start..start+c.len_utf8()],
+            1 => &self.contents[start..start + c.len_utf8()],
             _ => {
                 let (end, last) = res.last().unwrap_or_lice("span end not within source");
-                &self.contents[start..end+last.len_utf8()]
+                &self.contents[start..end + last.len_utf8()]
             }
         }
     }
