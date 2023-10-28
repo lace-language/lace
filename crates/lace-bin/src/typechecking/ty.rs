@@ -74,6 +74,7 @@ impl<'a> ConcreteType<'a> {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct TypeVariable(usize);
 
+// TODO: remove
 impl TypeVariable {
     /// This operation is explicit instead of a public first field so that
     /// it is harder to accidentally do and easier to control-f for.

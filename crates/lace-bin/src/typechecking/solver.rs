@@ -8,28 +8,20 @@ use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use unionfind::VecUnionFind;
 
-pub struct Solver<'a> {
-    type_mapping: TypeMapping<'a>,
-    // TODO: find a better way to do this. I hate partial struct borrows
-    // None *during* constraint application, passed as explicit parameter
-    uf: Option<VecUnionFind<usize>>,
+pub struct UnifyState<'x, 'a> {
+    new_constraints: Vec<Constraint>,
+    type_mapping: &'x TypeMapping<'a>,
+    error: Result<(), TypeError>
 }
 
-impl<'a> Solver<'a> {
-    pub fn new(variable_generator: TypeVariableGenerator, type_mapping: TypeMapping<'a>) -> Self {
-        Self {
-            type_mapping,
-            uf: Some(
-                VecUnionFind::new(0..=variable_generator.num_generated())
-                    .unwrap_or_lice("always increasing"),
-            ),
-        }
-    }
 
-    fn do_union(&mut self, a: TypeVariable, b: TypeVariable) -> TypeVariable {
+
+impl<'x, 'a> UnifyState<'x, 'a> {
+    fn unify_one(&mut self, a: TypeVariable, b: TypeVariable) -> TypeVariable {
         // look up if any correspond to concrete types we know
         let type_a = self.type_mapping.get(&a);
         let type_b = self.type_mapping.get(&b);
+
         match (type_a, type_b) {
             // if not, we choose one by a random dice roll. My dice rolled 0 so we choose a
             (None, None) => a,
@@ -42,64 +34,99 @@ impl<'a> Solver<'a> {
             // continue with a (random dice roll) and then later check if they really were
             // the same or that we went ahead with the wrong type.
             (Some(concrete_a), Some(concrete_b)) => {
-                self.maybe_bad_union(a, b, *concrete_a, *concrete_b);
+                match (concrete_a, concrete_b) {
+                    (ConcreteType::Int, ConcreteType::Int) => {},
+                    (ConcreteType::Bool, ConcreteType::Bool) => {},
+                    (ConcreteType::String, ConcreteType::String) => {},
+                    (ConcreteType::Tuple(elems_a), ConcreteType::Tuple(elems_b)) => {
+                        self.new_constraints.extend(
+                            elems_a.iter().copied()
+                                .zip(elems_b.iter().copied())
+                                .map(|(x, y)| Constraint::Equal(x, y))
+                        );
+                    },
+                    (
+                        ConcreteType::Function{params: params_a, ret: ret_a},
+                        ConcreteType::Function{params: params_b, ret: ret_b}
+                    ) => {
+                        self.new_constraints.extend(
+                            params_a.iter().copied()
+                                .zip(params_b.iter().copied())
+                                .map(|(x, y)| Constraint::Equal(x, y))
+                        );
+                        self.new_constraints.push(Constraint::Equal(**ret_a, **ret_b));
+                    },
+
+                    (a, b) => {
+                        panic!("type error: {a:?} != {b:?}")
+                    }
+                }
+
                 a
             }
         }
     }
+}
 
-    fn union(&mut self, uf: &mut VecUnionFind<usize>, a: TypeVariable, b: TypeVariable) {
-        uf.union_by(&a.as_usize(), &b.as_usize(), |a, b| {
-            self.do_union(TypeVariable::from_usize(a), TypeVariable::from_usize(b))
-                .as_usize()
-        })
-        .unwrap_or_lice("all variables were inserted at the start");
+pub struct Solver {
+    uf: VecUnionFind<usize>,
+    errors: Vec<TypeError>,
+}
+
+impl Solver {
+    pub fn new(variable_generator: TypeVariableGenerator) -> Self {
+        Self {
+            uf: VecUnionFind::new(0..=variable_generator.num_generated())
+                .unwrap_or_lice("always increasing")
+            ,
+            errors: vec![],
+        }
     }
 
-    pub fn apply_constraints(self, constraints: Vec<Constraint>) -> Result<SolvedTypes, TypeError> {
-        let Self{ type_mapping, uf } = self;
+    fn unify(&mut self, a: TypeVariable, b: TypeVariable, type_mapping: &TypeMapping) -> Vec<Constraint> {
+        let mut us = UnifyState {
+            new_constraints: Vec::new(),
+            type_mapping,
+            error: Ok(()),
+        };
 
-        for constraint in constraints {
+        self.uf.union_by(
+            &a.as_usize(),
+            &b.as_usize(),
+            |a, b| {
+                let res = us.unify_one(
+                    TypeVariable::from_usize(a),
+                    TypeVariable::from_usize(b),
+                );
+
+                res.as_usize()
+            },
+        )
+            .unwrap_or_lice("all variables were inserted at the start");
+
+        if let Err(e) = us.error {
+            self.errors.push(e);
+        }
+
+        us.new_constraints
+    }
+
+    pub fn apply_constraints(mut self, mut constraints: Vec<Constraint>, type_mapping: TypeMapping, name_mapping: NameMapping) -> Result<SolvedTypes, TypeError> {
+        while let Some(constraint) = constraints.pop() {
             match constraint {
                 Constraint::Equal(a, b) => {
                     // pass uf explicitly
-                    self.union(&mut uf, a, b);
+                    let new_constraints = self.unify(a, b, &type_mapping);
+                    constraints.extend(new_constraints);
                 }
             }
         }
 
         Ok(SolvedTypes {
             name_mapping,
-            type_mapping: self.type_mapping,
-            uf: self
-                .uf
-                .unwrap_or_lice("don't generate type errors while constraint processing"),
+            type_mapping,
+            uf: self.uf,
         })
-    }
-
-    fn maybe_bad_union(
-        &mut self,
-        type_variable_a: TypeVariable,
-        type_variable_b: TypeVariable,
-        concrete_a: ConcreteType<'a>,
-        concrete_b: ConcreteType<'a>,
-    ) {
-        self.maybe_bad_unions.push(MaybeBadUnion {
-            type_variable_a,
-            type_variable_b,
-            concrete_a,
-            concrete_b,
-        });
-    }
-
-    fn process_maybe_bad_union(&self, union: &MaybeBadUnion) -> Result<(), TypeError> {
-        println!(
-            "attempted union between {:?} and {:?}",
-            union.concrete_a, union.concrete_b
-        );
-        // TODO: reject
-
-        Ok(())
     }
 }
 

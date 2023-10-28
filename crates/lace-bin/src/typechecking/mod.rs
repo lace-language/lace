@@ -36,8 +36,6 @@ pub fn typecheck<'a, 'newa>(
         ..
     } = type_context;
 
-    let mut solver = Solver::new(variable_generator, type_mapping);
-    solver.apply_constraints(constraints);
-
-    solver.generate_type_errors(name_mapping)
+    let solver = Solver::new(variable_generator);
+    solver.apply_constraints(constraints, type_mapping, name_mapping)
 }

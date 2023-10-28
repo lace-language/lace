@@ -222,7 +222,7 @@ where
         &mut self,
         parent1: T,
         parent2: T,
-        mut union: U,
+        union: U,
     ) -> Result<UnionStatus, U::Err>
     where
         T: Clone,
