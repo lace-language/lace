@@ -6,7 +6,13 @@ use crate::typechecking::ty::{ConcreteType, TypeVariable};
 use bumpalo::Bump;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::fs;
+use itertools::Itertools;
+use crate::parser::span::Spans;
+use crate::source_file::SourceFile;
 use crate::syntax_id::{NodeId, Identified};
+use std::io::Write;
+use crate::debug_file::create_debug_file;
 
 pub type TypeMapping<'a> = HashMap<TypeVariable, ConcreteType<'a>>;
 
@@ -84,5 +90,56 @@ impl<'a> TypeContext<'a> {
 
     pub fn type_of_name(&mut self, ident: &Identified<Ident>) -> TypeVariable {
         self.get_or_insert_name_mapping(ident.node_id)
+    }
+
+    fn name_of_type_var(
+        &self,
+        inverse_name_mapping: &HashMap<&TypeVariable, &NodeId>,
+        spans: &Spans,
+        source: SourceFile,
+        var: TypeVariable
+    ) -> String {
+        if let Some(i) = inverse_name_mapping.get(&var) {
+            let span = spans.get(**i);
+            format!("variable {}", source.slice_span(span))
+        } else if let Some(i) = self.type_mapping.get(&var) {
+            match i {
+                ConcreteType::Int => format!("int"),
+                ConcreteType::Bool => format!("bool"),
+                ConcreteType::Function { params, ret } => format!(
+                    "fn ({}) -> {}",
+                    params.iter()
+                        .map(|v| self.name_of_type_var(inverse_name_mapping, spans, source,*v))
+                        .join(", "),
+                    self.name_of_type_var(inverse_name_mapping, spans, source, **ret)
+                ),
+                ConcreteType::Tuple(vars) => format!(
+                    "({})",
+                    vars.iter()
+                        .map(|v| self.name_of_type_var(inverse_name_mapping, spans, source, *v))
+                        .join(", ")
+                ),
+                ConcreteType::String => format!("string"),
+            }
+        } else {
+            format!("type variable {}", var.as_usize())
+        }
+    }
+
+    pub fn save_debug(&self, spans: &Spans, source: SourceFile) {
+        let mut f = create_debug_file("type-constraints");
+        let inverse_name_mapping = self.name_mapping
+            .iter()
+            .map(|(a, b)| (b, a))
+            .collect::<HashMap<_, _>>();
+
+        for Constraint::Equal(a, b) in &self.constraints {
+            writeln!(
+                f,
+                "{} == {}",
+                self.name_of_type_var(&inverse_name_mapping, spans, source, *a),
+                self.name_of_type_var(&inverse_name_mapping, spans, source, *b)
+            ).unwrap()
+        }
     }
 }

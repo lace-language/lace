@@ -9,6 +9,7 @@ mod parser;
 mod source_file;
 mod typechecking;
 mod syntax_id;
+mod debug_file;
 
 use crate::error::{CompilerError, ResultExt};
 use crate::parser::ast::Ast;
@@ -39,7 +40,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     let resolved = graph.resolve(&ast);
 
     // For debugging:
-    graph.save("graph.html");
+    graph.save_debug();
 
     eprintln!("resolved {}", !resolved.names.len());
     for (from, to) in &resolved.names {
@@ -55,7 +56,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     }
 
     let type_arena = Bump::new();
-    let _types = typecheck(&ast, &resolved, &type_arena);
+    let _types = typecheck(&ast, &resolved, &spans, source, &type_arena);
 
     Ok(ast)
 }

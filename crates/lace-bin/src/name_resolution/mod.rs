@@ -13,6 +13,7 @@ use stack_graphs::{
     serde::NoFilter,
     stitching::{Database, ForwardPartialPathStitcher, GraphEdges},
 };
+use crate::debug_file::create_debug_file;
 use crate::syntax_id::{NodeId, Identified};
 
 #[cfg(test)]
@@ -250,8 +251,8 @@ impl<'s, 'a> Graph {
         }
     }
 
-    pub fn save(&self, name: impl AsRef<Path>) {
-        let mut f = fs::File::create(name).unwrap();
+    pub fn save_debug(&self) {
+        let mut f = create_debug_file("scope_graph.html");
         f.write_all(
             self.graph
                 .to_html_string(

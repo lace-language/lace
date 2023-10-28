@@ -13,7 +13,7 @@ pub enum Type<'a> {
 }
 
 /// Used during type checking, contains unresolved types (type variables)
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum ConcreteType<'a> {
     Int,
     Bool,

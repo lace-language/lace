@@ -174,7 +174,7 @@ impl<'a> TypeConstraintGenerator<'a> for TypeSpec<'_> {
                 "int" => ctx.concrete_type(ConcreteType::Int),
                 "string" => ctx.concrete_type(ConcreteType::String),
                 "bool" => ctx.concrete_type(ConcreteType::Bool),
-                _ => unimplemented!(),
+                other => unimplemented!("type {other} not yet supported. Use int, string or bool"),
             },
         }
     }

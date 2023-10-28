@@ -98,8 +98,11 @@ impl<'a> Solver<'a> {
         });
     }
 
-    fn process_maybe_bad_union(&self, _union: &MaybeBadUnion) -> Result<(), TypeError> {
-        todo!()
+    fn process_maybe_bad_union(&self, union: &MaybeBadUnion) -> Result<(), TypeError> {
+        println!("attempted union between {:?} and {:?}", union.concrete_a, union.concrete_b);
+        // TODO: reject
+
+        Ok(())
     }
 }
 

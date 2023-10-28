@@ -2,4 +2,4 @@
 .idea
 tarpaulin-report.html
 test.lc
-graph.html
+debug_output/

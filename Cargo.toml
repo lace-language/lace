@@ -12,5 +12,6 @@ logos = "0.13.0"
 miette = { version = "5.10.0", features = ["fancy"] }
 derive_more = "0.99.17"
 stack-graphs = { version = "0.12.0", features = ["visualization"] }
+itertools = "0.11.0"
 unionfind = {path="./crates/unionfind"}
 
