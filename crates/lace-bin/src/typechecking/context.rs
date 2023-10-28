@@ -1,12 +1,12 @@
 use crate::name_resolution::NameResolutions;
 use crate::parser::ast::Ident;
-use crate::parser::span::{NodeId, Spanned};
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::ty::TypeVariableGenerator;
 use crate::typechecking::ty::{ConcreteType, TypeVariable};
 use bumpalo::Bump;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use crate::syntax_id::{NodeId, Identified};
 
 pub type TypeMapping<'a> = HashMap<TypeVariable, ConcreteType<'a>>;
 
@@ -82,7 +82,7 @@ impl<'a> TypeContext<'a> {
         self.constraints.push(Constraint::Equal(a, b));
     }
 
-    pub fn type_of_name(&mut self, ident: &Spanned<Ident>) -> TypeVariable {
-        self.get_or_insert_name_mapping(ident.span)
+    pub fn type_of_name(&mut self, ident: &Identified<Ident>) -> TypeVariable {
+        self.get_or_insert_name_mapping(ident.node_id)
     }
 }

@@ -8,6 +8,7 @@ mod name_resolution;
 mod parser;
 mod source_file;
 mod typechecking;
+mod syntax_id;
 
 use crate::error::{CompilerError, ResultExt};
 use crate::parser::ast::Ast;

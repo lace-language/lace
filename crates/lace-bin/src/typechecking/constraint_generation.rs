@@ -1,7 +1,7 @@
 use crate::parser::ast::{
     BinaryOp, Block, ExprKind, File, Function, Item, Lit, Parameter, Statement, TypeSpec, UnaryOp,
 };
-use crate::parser::span::Spanned;
+use crate::syntax_id::Identified;
 use crate::typechecking::constraint::TypeConstraintGenerator;
 use crate::typechecking::context::TypeContext;
 use crate::typechecking::ty::{ConcreteType, TypeVariable};
@@ -111,7 +111,7 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for Spanned<Block<'_, '_>> {
+impl<'a> TypeConstraintGenerator<'a> for Identified<Block<'_, '_>> {
     type TypeResult = TypeVariable;
 
     fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
@@ -200,7 +200,7 @@ impl<'a> TypeConstraintGenerator<'a> for Item<'_, '_> {
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for Spanned<Function<'_, '_>> {
+impl<'a> TypeConstraintGenerator<'a> for Identified<Function<'_, '_>> {
     type TypeResult = ();
 
     fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {

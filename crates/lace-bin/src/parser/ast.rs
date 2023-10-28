@@ -1,24 +1,24 @@
-use crate::parser::span::Spanned;
+use crate::syntax_id::Identified;
 use derive_more::Display;
 
-pub type Expr<'s, 'a> = Spanned<ExprKind<'s, 'a>>;
+pub type Expr<'s, 'a> = Identified<ExprKind<'s, 'a>>;
 
 /// Expressions
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprKind<'s, 'a> {
     Lit(Lit<'s>),
     If(
-        &'a Spanned<Self>,
-        &'a Spanned<Block<'s, 'a>>,
-        Option<&'a Spanned<Block<'s, 'a>>>,
+        &'a Identified<Self>,
+        &'a Identified<Block<'s, 'a>>,
+        Option<&'a Identified<Block<'s, 'a>>>,
     ),
-    Block(&'a Spanned<Block<'s, 'a>>),
-    Ident(Spanned<Ident<'s>>),
-    Paren(&'a Spanned<Self>),
-    BinaryOp(Spanned<BinaryOp>, &'a Spanned<Self>, &'a Spanned<Self>),
-    UnaryOp(Spanned<UnaryOp>, &'a Spanned<Self>),
-    Tuple(&'a [Spanned<Self>]),
-    Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
+    Block(&'a Identified<Block<'s, 'a>>),
+    Ident(Identified<Ident<'s>>),
+    Paren(&'a Identified<Self>),
+    BinaryOp(Identified<BinaryOp>, &'a Identified<Self>, &'a Identified<Self>),
+    UnaryOp(Identified<UnaryOp>, &'a Identified<Self>),
+    Tuple(&'a [Identified<Self>]),
+    Call(&'a Identified<Self>, Identified<&'a [Identified<Self>]>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
@@ -62,23 +62,23 @@ pub struct Ident<'s> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TypeSpec<'s> {
-    Name(Spanned<Ident<'s>>),
+    Name(Identified<Ident<'s>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Parameter<'s> {
-    pub name: Spanned<Ident<'s>>,
-    pub type_spec: Spanned<TypeSpec<'s>>,
+    pub name: Identified<Ident<'s>>,
+    pub type_spec: Identified<TypeSpec<'s>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Function<'s, 'a> {
-    pub name: Spanned<Ident<'s>>,
+    pub name: Identified<Ident<'s>>,
 
     pub parameters: &'a [Parameter<'s>],
-    pub ret: Option<Spanned<TypeSpec<'s>>>,
+    pub ret: Option<Identified<TypeSpec<'s>>>,
 
-    pub block: &'a Spanned<Block<'s, 'a>>,
+    pub block: &'a Identified<Block<'s, 'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -100,15 +100,15 @@ pub enum Lit<'s> {
 pub enum Statement<'s, 'a> {
     Expr(&'a Expr<'s, 'a>),
     Let(
-        Spanned<Ident<'s>>,
-        Option<Spanned<TypeSpec<'s>>>,
+        Identified<Ident<'s>>,
+        Option<Identified<TypeSpec<'s>>>,
         &'a Expr<'s, 'a>,
     ),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Item<'s, 'a> {
-    Function(Spanned<Function<'s, 'a>>),
+    Function(Identified<Function<'s, 'a>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]

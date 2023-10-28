@@ -1,24 +1,24 @@
-macro_rules! spanned {
+macro_rules! identified {
     ($x:pat) => {
-        $crate::parser::span::Spanned { value: $x, .. }
+        $crate::syntax_id::Identified { value: $x, .. }
     };
 }
 
 macro_rules! int {
     ($i:literal) => {
-        spanned!(ExprKind::Lit(Lit::Int(stringify!($i))))
+        identified!(ExprKind::Lit(Lit::Int(stringify!($i))))
     };
 }
 
 macro_rules! string {
     ($i:literal) => {
-        spanned!(ExprKind::Lit(Lit::String($i)))
+        identified!(ExprKind::Lit(Lit::String($i)))
     };
 }
 
 macro_rules! ident_expr {
     ($i:ident) => {
-        spanned!(ExprKind::Ident(spanned!(Ident {
+        identified!(ExprKind::Ident(identified!(Ident {
             string: stringify!($i),
         })))
     };
@@ -26,7 +26,7 @@ macro_rules! ident_expr {
 
 macro_rules! ident {
     ($i:ident) => {
-        spanned!(Ident {
+        identified!(Ident {
             string: stringify!($i),
         })
     };
@@ -34,110 +34,110 @@ macro_rules! ident {
 
 macro_rules! bool {
     ($i:literal) => {
-        spanned!(ExprKind::Lit(Lit::Bool($i)))
+        identified!(ExprKind::Lit(Lit::Bool($i)))
     };
 }
 
 macro_rules! neg {
     ($x:pat) => {
-        spanned!(ExprKind::UnaryOp(spanned!(UnaryOp::Neg), $x))
+        identified!(ExprKind::UnaryOp(identified!(UnaryOp::Neg), $x))
     };
 }
 
 macro_rules! not {
     ($x:pat) => {
-        spanned!(ExprKind::UnaryOp(spanned!(UnaryOp::Not), $x))
+        identified!(ExprKind::UnaryOp(identified!(UnaryOp::Not), $x))
     };
 }
 
 macro_rules! and {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::LogicalAnd), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::LogicalAnd), $x, $y))
     };
 }
 
 macro_rules! or {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::LogicalOr), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::LogicalOr), $x, $y))
     };
 }
 
 macro_rules! add {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Add), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Add), $x, $y))
     };
 }
 
 macro_rules! sub {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Sub), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Sub), $x, $y))
     };
 }
 
 macro_rules! mul {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Mul), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Mul), $x, $y))
     };
 }
 
 macro_rules! div {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Div), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Div), $x, $y))
     };
 }
 
 macro_rules! gt {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Gt), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Gt), $x, $y))
     };
 }
 
 macro_rules! gte {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Gte), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Gte), $x, $y))
     };
 }
 
 macro_rules! lt {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Lt), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Lt), $x, $y))
     };
 }
 
 macro_rules! lte {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Lte), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Lte), $x, $y))
     };
 }
 
 macro_rules! eq {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Eq), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Eq), $x, $y))
     };
 }
 
 macro_rules! neq {
     ($x:pat, $y:pat) => {
-        spanned!(ExprKind::BinaryOp(spanned!(BinaryOp::Neq), $x, $y))
+        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Neq), $x, $y))
     };
 }
 
 macro_rules! paren {
     ($x:pat) => {
-        spanned!(ExprKind::Paren($x))
+        identified!(ExprKind::Paren($x))
     };
 }
 
 macro_rules! tuple {
     ($($x:pat),*) => {
-        spanned!(ExprKind::Tuple(&[$($x),*]))
+        identified!(ExprKind::Tuple(&[$($x),*]))
     };
 }
 
 macro_rules! stmt {
     (let: $x:ident, $ty: pat, $exp:pat) => {
         Statement::Let(
-            spanned!(Ident {
+            identified!(Ident {
                 string: stringify!($x),
             }),
             Some($ty),
@@ -146,7 +146,7 @@ macro_rules! stmt {
     };
     (let: $x:ident, $exp:pat) => {
         Statement::Let(
-            spanned!(Ident {
+            identified!(Ident {
                 string: stringify!($x),
             }),
             None,
@@ -160,16 +160,16 @@ macro_rules! stmt {
 
 macro_rules! call {
     ($callee: pat => [$($arg: pat),*]) => {
-        spanned!(ExprKind::Call($callee, spanned!(&[$($arg),*])))
+        identified!(ExprKind::Call($callee, identified!(&[$($arg),*])))
     };
 }
 
 macro_rules! block {
     ($($stmts:pat),*) => {
-        spanned!(Block { stmts: &[$($stmts),*], last: None, .. })
+        identified!(Block { stmts: &[$($stmts),*], last: None, .. })
     };
     ($($stmts:pat),* => $exp:pat) => {
-        spanned!(Block { stmts: &[$($stmts),*], last: Some($exp), .. })
+        identified!(Block { stmts: &[$($stmts),*], last: Some($exp), .. })
     };
 }
 
@@ -183,13 +183,13 @@ macro_rules! file {
 
 macro_rules! item {
     (func: $pat: pat) => {
-        Item::Function(spanned!($pat))
+        Item::Function(identified!($pat))
     };
 }
 
 macro_rules! type_spec {
     (name: $name: ident) => {
-        spanned!(TypeSpec::Name(ident!($name)))
+        identified!(TypeSpec::Name(ident!($name)))
     };
 }
 
@@ -221,15 +221,15 @@ macro_rules! function {
 
 macro_rules! block_expr {
     ($($tok:tt)*) =>  {
-        spanned!(ExprKind::Block(block!{$($tok)*}))
+        identified!(ExprKind::Block(block!{$($tok)*}))
     }
 }
 
 macro_rules! if_ {
     ($cond:pat, $then:pat) => {
-        spanned!(ExprKind::If($cond, $then, None))
+        identified!(ExprKind::If($cond, $then, None))
     };
     ($cond:pat, $then:pat, $else:pat) => {
-        spanned!(ExprKind::If($cond, $then, Some($else)))
+        identified!(ExprKind::If($cond, $then, Some($else)))
     };
 }

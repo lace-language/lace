@@ -1,11 +1,11 @@
 use crate::lexer::token::Token;
 use crate::parser::ast::{Block, Expr, ExprKind, Statement};
 use crate::parser::error::ParseResult;
-use crate::parser::span::WithSpan;
+use crate::syntax_id::WithNodeId;
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
 
-use super::span::Spanned;
+use crate::syntax_id::Identified;
 
 impl<'s, 'a> Parser<'s, 'a> {
     fn let_(&mut self) -> ParseResult<Statement<'s, 'a>> {
@@ -26,7 +26,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(Statement::Let(ident, type_spec, self.alloc(expr)))
     }
 
-    pub(super) fn block(&mut self) -> ParseResult<Spanned<Block<'s, 'a>>> {
+    pub(super) fn block(&mut self) -> ParseResult<Identified<Block<'s, 'a>>> {
         let start_span = self.accept_required(Token::CurlyLeft)?;
 
         let mut vec = Vec::new_in(self.arena);
@@ -37,7 +37,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     stmts: vec.into_bump_slice(),
                     last: None,
                 }
-                .with_span(self.spans.store(start_span.merge(&end_span))));
+                .with_node_id(self.spans.store(start_span.merge(&end_span))));
             }
             // TODO: Spans for statements
             if self.peek_is(tok![let])? {
@@ -50,7 +50,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
                     }
-                    .with_span(self.spans.store(start_span.merge(&end_span))));
+                    .with_node_id(self.spans.store(start_span.merge(&end_span))));
                 }
 
                 self.accept_optional(tok![;])?;
@@ -65,7 +65,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                         stmts: vec.into_bump_slice(),
                         last: Some(expr),
                     }
-                    .with_span(self.spans.store(start_span.merge(&end_span))));
+                    .with_node_id(self.spans.store(start_span.merge(&end_span))));
                 }
             }
         }
@@ -85,7 +85,7 @@ impl<'s, 'a> Parser<'s, 'a> {
                     stmts: &[],
                     last: Some(else_if),
                 }
-                .with_span(span)
+                .with_node_id(span)
             } else {
                 self.block()?
             };
@@ -96,10 +96,10 @@ impl<'s, 'a> Parser<'s, 'a> {
                 self.alloc(then_block),
                 Some(self.alloc(else_block)),
             )
-            .with_span(span))
+            .with_node_id(span))
         } else {
             let span = self.spans.store_merged(start_span, &then_block);
-            Ok(ExprKind::If(self.alloc(expr), self.alloc(then_block), None).with_span(span))
+            Ok(ExprKind::If(self.alloc(expr), self.alloc(then_block), None).with_node_id(span))
         }
     }
 }

@@ -1,9 +1,9 @@
 use crate::lexer::token::Token;
 use crate::parser::ast::{Function, Parameter};
 use crate::parser::error::ParseResult;
-use crate::parser::span::{Spanned, WithSpan};
 use crate::parser::Parser;
 use bumpalo::collections::Vec;
+use crate::syntax_id::{Identified, WithNodeId};
 
 impl<'s, 'a> Parser<'s, 'a> {
     fn parse_parameter(&mut self) -> ParseResult<Parameter<'s>> {
@@ -39,7 +39,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(parameters.into_bump_slice())
     }
 
-    pub(super) fn parse_function(&mut self) -> ParseResult<Spanned<Function<'s, 'a>>> {
+    pub(super) fn parse_function(&mut self) -> ParseResult<Identified<Function<'s, 'a>>> {
         let start_span = self.accept_required(tok![fn])?;
 
         let name = self.ident()?;
@@ -59,6 +59,6 @@ impl<'s, 'a> Parser<'s, 'a> {
             ret,
             block: self.alloc(block),
         }
-        .with_span(fn_span))
+        .with_node_id(fn_span))
     }
 }

@@ -4,16 +4,16 @@ use std::{collections::BTreeMap, fs, ops::Deref};
 
 use crate::parser::{
     ast::{Block, Expr, ExprKind, File, Ident, Item, Statement},
-    span::{NodeId, Spanned},
 };
 use stack_graphs::{
     arena::Handle,
     graph::{Node, NodeID as GraphId, StackGraph, Symbol},
+    NoCancellation,
     partial::{PartialPath, PartialPaths},
     serde::NoFilter,
     stitching::{Database, ForwardPartialPathStitcher, GraphEdges},
-    NoCancellation,
 };
+use crate::syntax_id::{NodeId, Identified};
 
 #[cfg(test)]
 mod tests;
@@ -60,11 +60,11 @@ impl<'s, 'a> Graph {
     /// Add a new definition to the stack-graph
     ///
     /// This only creates a node. It is does not connect it to the graph.
-    fn new_definition(&mut self, ident: &Spanned<Ident<'s>>) -> Handle<Node> {
+    fn new_definition(&mut self, ident: &Identified<Ident<'s>>) -> Handle<Node> {
         let symbol = self.add_symbol(ident.deref().string);
         let node_id = self.new_node_id();
 
-        self.id_map.insert(node_id, ident.span);
+        self.id_map.insert(node_id, ident.node_id);
 
         // Unwrap is fine because we just made the node id
         self.graph
@@ -75,10 +75,10 @@ impl<'s, 'a> Graph {
     /// Add a new reference to the stack-graph
     ///
     /// This only creates a node. It is does not connect it to the graph.
-    fn new_reference(&mut self, ident: &Spanned<Ident<'s>>) -> Handle<Node> {
+    fn new_reference(&mut self, ident: &Identified<Ident<'s>>) -> Handle<Node> {
         let symbol = self.add_symbol(ident.deref().string);
         let node_id = self.new_node_id();
-        self.id_map.insert(node_id, ident.span);
+        self.id_map.insert(node_id, ident.node_id);
 
         // Unwrap is fine because we just made the node id
         self.graph
@@ -177,7 +177,7 @@ impl<'s, 'a> Graph {
         self.block(internal_scope, f.block);
     }
 
-    fn block(&mut self, scope: Handle<Node>, block: &Spanned<Block<'s, 'a>>) {
+    fn block(&mut self, scope: Handle<Node>, block: &Identified<Block<'s, 'a>>) {
         let block = block.deref();
         let block_scope = self.new_scope(false);
         self.edge(block_scope, scope, 0);
