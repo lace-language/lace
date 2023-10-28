@@ -1,44 +1,31 @@
 use crate::lice::Lice;
 use crate::syntax_id::NodeId;
 use crate::typechecking::constraint::Constraint;
+use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::{NameMapping, TypeContext, TypeMapping};
 use crate::typechecking::error::TypeError;
-use crate::typechecking::ty::{ConcreteType, Type, TypeVariable, TypeVariableGenerator};
+use crate::typechecking::ty::{ConcreteType, Type, TypeVariable};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use unionfind::VecUnionFind;
 
 type SolveState = VecUnionFind<usize>;
 
-pub struct Solver<'a> {
-    variable_generator: TypeVariableGenerator,
-    constraints: Vec<Constraint>,
-    type_mapping: TypeMapping<'a>,
-    name_mapping: NameMapping,
-    errors: Vec<TypeError>,
-}
-
-impl<'a> Solver<'a> {
-    pub fn from_type_context(
-        ctx: TypeContext<'a>
-    ) -> Self {
-        Self {
-            variable_generator: ctx.variable_generator,
-            constraints: ctx.constraints,
-            type_mapping: ctx.type_mapping,
-            name_mapping: ctx.name_mapping,
-            errors: vec![],
-        }
+impl<'a> TypeContext<'a> {
+    #[allow(unused)]
+    fn cant_unify(&mut self, ca: ConcreteType, cb: ConcreteType, a: TypeVariable, b: TypeVariable) {
+        todo!()
     }
 
-    fn cant_unify(&mut self, ca: &ConcreteType, cb: &ConcreteType, a: TypeVariable, b: TypeVariable) {
-
-    }
-
-    fn unify_one(&mut self, a: TypeVariable, b: TypeVariable) -> TypeVariable {
+    fn unify_one(
+        &mut self,
+        a: TypeVariable,
+        b: TypeVariable,
+        meta: ConstraintMetadata<'a>,
+    ) -> TypeVariable {
         // look up if any correspond to concrete types we know
-        let type_a = self.type_mapping.get(&a);
-        let type_b = self.type_mapping.get(&b);
+        let type_a = self.type_mapping.get(&a).copied();
+        let type_b = self.type_mapping.get(&b).copied();
 
         match (type_a, type_b) {
             // if not, we choose one by a random dice roll. My dice rolled 0 so we choose a
@@ -57,13 +44,15 @@ impl<'a> Solver<'a> {
                     (ConcreteType::Bool, ConcreteType::Bool) => {}
                     (ConcreteType::String, ConcreteType::String) => {}
                     (ConcreteType::Tuple(elems_a), ConcreteType::Tuple(elems_b)) => {
-                        self.constraints.extend(
-                            elems_a
-                                .iter()
-                                .copied()
-                                .zip(elems_b.iter().copied())
-                                .map(|(x, y)| Constraint::Equal(x, y)),
-                        );
+                        let meta = self.alloc(meta);
+
+                        for (x, y) in elems_a.iter().zip(elems_b) {
+                            self.add_equal_constraint(
+                                *x,
+                                *y,
+                                ConstraintMetadata::TupleUnify { orig: meta },
+                            );
+                        }
                     }
                     (
                         ConcreteType::Function {
@@ -75,15 +64,21 @@ impl<'a> Solver<'a> {
                             ret: ret_b,
                         },
                     ) => {
-                        self.constraints.extend(
-                            params_a
-                                .iter()
-                                .copied()
-                                .zip(params_b.iter().copied())
-                                .map(|(x, y)| Constraint::Equal(x, y)),
-                        );
-                        self.constraints
-                            .push(Constraint::Equal(**ret_a, **ret_b));
+                        let meta = self.alloc(meta);
+
+                        for (x, y) in params_a.iter().zip(params_b) {
+                            self.add_equal_constraint(
+                                *x,
+                                *y,
+                                ConstraintMetadata::FunctionParamUnify { orig: meta },
+                            );
+                        }
+
+                        self.add_equal_constraint(
+                            *ret_a,
+                            *ret_b,
+                            ConstraintMetadata::FunctionReturnUnify { orig: meta },
+                        )
                     }
 
                     (ca, cb) => {
@@ -100,26 +95,30 @@ impl<'a> Solver<'a> {
         &mut self,
         a: TypeVariable,
         b: TypeVariable,
+        meta: ConstraintMetadata<'a>,
         uf: &mut SolveState,
     ) {
-        uf
-            .union_by(&a.as_usize(), &b.as_usize(), |a, b| {
-                let res = self.unify_one(TypeVariable::from_usize(a), TypeVariable::from_usize(b));
+        uf.union_by(&a.as_usize(), &b.as_usize(), |a, b| {
+            let res = self.unify_one(
+                TypeVariable::from_usize(a),
+                TypeVariable::from_usize(b),
+                meta,
+            );
 
-                res.as_usize()
-            })
-            .unwrap_or_lice("all variables were inserted at the start");
+            res.as_usize()
+        })
+        .unwrap_or_lice("all variables were inserted at the start");
     }
 
     pub fn solve(mut self) -> Result<SolvedTypes<'a>, TypeError> {
         let mut uf = VecUnionFind::new(0..=self.variable_generator.num_generated())
             .unwrap_or_lice("always increasing");
 
-        while let Some(constraint) = self.constraints.pop() {
+        while let Some((constraint, meta)) = self.constraints.pop() {
             match constraint {
                 Constraint::Equal(a, b) => {
                     // pass uf explicitly
-                    self.unify(a, b, &mut uf);
+                    self.unify(a, b, meta, &mut uf);
                 }
             }
         }

@@ -5,11 +5,12 @@ use crate::source_file::SourceFile;
 use crate::typechecking::constraint::TypeConstraintGenerator;
 use crate::typechecking::context::TypeContext;
 use crate::typechecking::error::TypeError;
-use crate::typechecking::solver::{SolvedTypes, Solver};
+use crate::typechecking::solver::SolvedTypes;
 use bumpalo::Bump;
 
 pub mod constraint;
 pub mod constraint_generation;
+pub mod constraint_metadata;
 pub mod context;
 pub mod error;
 pub mod solver;
@@ -27,7 +28,5 @@ pub fn typecheck<'a, 'newa>(
     ast.generate_constraints(&mut type_context);
     type_context.add_name_resolutions(name_resolutions);
     type_context.save_debug(spans, source);
-
-    let solver = Solver::from_type_context(type_context);
-    solver.solve()
+    type_context.solve()
 }

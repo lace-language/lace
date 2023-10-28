@@ -5,6 +5,7 @@ use crate::parser::span::Spans;
 use crate::source_file::SourceFile;
 use crate::syntax_id::{Identified, NodeId};
 use crate::typechecking::constraint::Constraint;
+use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::ty::TypeVariableGenerator;
 use crate::typechecking::ty::{ConcreteType, TypeVariable};
 use bumpalo::Bump;
@@ -30,7 +31,7 @@ pub struct TypeContext<'a> {
 
     /// stores constraints. Constraints can only reference type variables,
     /// not concrete types. This makes the union find phase quicker.
-    pub constraints: Vec<Constraint>,
+    pub constraints: Vec<(Constraint, ConstraintMetadata<'a>)>,
 
     /// Stores a mapping from identifiers to type variables
     pub name_mapping: NameMapping,
@@ -63,7 +64,7 @@ impl<'a> TypeContext<'a> {
         for (a, b) in &name_resolutions.names {
             let a = self.get_or_insert_name_mapping(*a);
             let b = self.get_or_insert_name_mapping(*b);
-            self.add_equal_constraint(a, b);
+            self.add_equal_constraint(a, b, ConstraintMetadata::NameRef);
         }
     }
 
@@ -81,13 +82,23 @@ impl<'a> TypeContext<'a> {
         self.arena.alloc(value)
     }
 
-    pub fn add_equal_constraint_concrete(&mut self, a: TypeVariable, b: ConcreteType<'a>) {
+    pub fn add_equal_constraint_concrete(
+        &mut self,
+        a: TypeVariable,
+        b: ConcreteType<'a>,
+        meta: ConstraintMetadata<'a>,
+    ) {
         let b = self.concrete_type(b);
-        self.add_equal_constraint(a, b);
+        self.add_equal_constraint(a, b, meta);
     }
 
-    pub fn add_equal_constraint(&mut self, a: TypeVariable, b: TypeVariable) {
-        self.constraints.push(Constraint::Equal(a, b));
+    pub fn add_equal_constraint(
+        &mut self,
+        a: TypeVariable,
+        b: TypeVariable,
+        meta: ConstraintMetadata<'a>,
+    ) {
+        self.constraints.push((Constraint::Equal(a, b), meta));
     }
 
     pub fn type_of_name(&mut self, ident: &Identified<Ident>) -> TypeVariable {
@@ -138,7 +149,7 @@ impl<'a> TypeContext<'a> {
             .collect::<HashMap<_, _>>();
 
         writeln!(f, "constraints:").unwrap();
-        for Constraint::Equal(a, b) in &self.constraints {
+        for (Constraint::Equal(a, b), _) in &self.constraints {
             writeln!(
                 f,
                 "{: >40} == {:<40}       {} == {}",

@@ -2,6 +2,4 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 #[derive(Debug, Error, Diagnostic, Clone, PartialEq)]
-pub enum TypeError {
-
-}
+pub enum TypeError {}

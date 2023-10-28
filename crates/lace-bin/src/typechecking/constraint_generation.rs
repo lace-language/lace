@@ -1,34 +1,50 @@
 use crate::parser::ast::{
-    BinaryOp, Block, ExprKind, File, Function, Item, Lit, Parameter, Statement, TypeSpec, UnaryOp,
+    BinaryOp, Block, Expr, ExprKind, File, Function, Item, Lit, Parameter, Statement, TypeSpec,
+    UnaryOp,
 };
-use crate::syntax_id::Identified;
+use crate::syntax_id::{Identified, NodeId};
 use crate::typechecking::constraint::TypeConstraintGenerator;
+use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::TypeContext;
 use crate::typechecking::ty::{ConcreteType, TypeVariable};
 use bumpalo::collections::Vec;
 
-impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
+impl<'a> TypeConstraintGenerator<'a> for Expr<'_, '_> {
     type TypeResult = TypeVariable;
 
     fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
-        match self {
+        match &self.value {
             ExprKind::Lit(l) => l.generate_constraints(ctx),
             ExprKind::If(condition, if_true, if_false) => {
                 let condition_type = condition.generate_constraints(ctx);
 
-                ctx.add_equal_constraint_concrete(condition_type, ConcreteType::Bool);
-                let if_true_type = if_true.generate_constraints(ctx);
+                ctx.add_equal_constraint_concrete(
+                    condition_type,
+                    ConcreteType::Bool,
+                    ConstraintMetadata::BlockCondition(self.node_id),
+                );
+
+                let if_true_type = if_true.generate_constraints(ctx).0;
 
                 if let Some(if_false) = if_false {
-                    let if_false_type = if_false.generate_constraints(ctx);
-                    ctx.add_equal_constraint(if_true_type, if_false_type);
+                    let if_false_type = if_false.generate_constraints(ctx).0;
+                    ctx.add_equal_constraint(
+                        if_true_type,
+                        if_false_type,
+                        ConstraintMetadata::IfReturn(if_true.node_id, if_false.node_id),
+                    );
                 } else {
-                    ctx.add_equal_constraint_concrete(if_true_type, ConcreteType::Unit);
+                    // TODO: what's the context here?
+                    ctx.add_equal_constraint_concrete(
+                        if_true_type,
+                        ConcreteType::Unit,
+                        ConstraintMetadata::NoConstraintMetadata,
+                    );
                 }
 
                 if_true_type
             }
-            ExprKind::Block(b) => b.generate_constraints(ctx),
+            ExprKind::Block(b) => b.generate_constraints(ctx).0,
             ExprKind::Ident(i) => ctx.type_of_name(i),
             ExprKind::Paren(expr) => expr.generate_constraints(ctx),
             // TODO: with operator overloading this obviously needs to become much more complicated.
@@ -38,8 +54,16 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
                     let l_type = l.generate_constraints(ctx);
                     let r_type = r.generate_constraints(ctx);
 
-                    ctx.add_equal_constraint_concrete(l_type, ConcreteType::Int);
-                    ctx.add_equal_constraint_concrete(r_type, ConcreteType::Int);
+                    ctx.add_equal_constraint_concrete(
+                        l_type,
+                        ConcreteType::Int,
+                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                    );
+                    ctx.add_equal_constraint_concrete(
+                        r_type,
+                        ConcreteType::Int,
+                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                    );
 
                     ctx.concrete_type(ConcreteType::Int)
                 }
@@ -47,8 +71,16 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
                     let l_type = l.generate_constraints(ctx);
                     let r_type = r.generate_constraints(ctx);
 
-                    ctx.add_equal_constraint_concrete(l_type, ConcreteType::Bool);
-                    ctx.add_equal_constraint_concrete(r_type, ConcreteType::Bool);
+                    ctx.add_equal_constraint_concrete(
+                        l_type,
+                        ConcreteType::Bool,
+                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                    );
+                    ctx.add_equal_constraint_concrete(
+                        r_type,
+                        ConcreteType::Bool,
+                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                    );
 
                     ctx.concrete_type(ConcreteType::Bool)
                 }
@@ -61,7 +93,11 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
                     let l_type = l.generate_constraints(ctx);
                     let r_type = r.generate_constraints(ctx);
 
-                    ctx.add_equal_constraint(l_type, r_type);
+                    ctx.add_equal_constraint(
+                        l_type,
+                        r_type,
+                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                    );
 
                     ctx.concrete_type(ConcreteType::Bool)
                 }
@@ -69,13 +105,14 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
             ExprKind::UnaryOp(op, expr) => {
                 let expr_type = expr.generate_constraints(ctx);
 
+                let meta = ConstraintMetadata::UnaryOp(self.node_id, op.value);
                 match op.value {
                     UnaryOp::Not => {
-                        ctx.add_equal_constraint_concrete(expr_type, ConcreteType::Bool);
+                        ctx.add_equal_constraint_concrete(expr_type, ConcreteType::Bool, meta);
                         ctx.concrete_type(ConcreteType::Bool)
                     }
                     UnaryOp::Neg => {
-                        ctx.add_equal_constraint_concrete(expr_type, ConcreteType::Int);
+                        ctx.add_equal_constraint_concrete(expr_type, ConcreteType::Int, meta);
                         ctx.concrete_type(ConcreteType::Int)
                     }
                 }
@@ -103,7 +140,13 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
                 };
                 let defined_f_ty = f.generate_constraints(ctx);
 
-                ctx.add_equal_constraint_concrete(defined_f_ty, expected_f_ty);
+                ctx.add_equal_constraint_concrete(
+                    defined_f_ty,
+                    expected_f_ty,
+                    ConstraintMetadata::Call {
+                        call_expr: self.node_id,
+                    },
+                );
 
                 ret_ty
             }
@@ -111,8 +154,17 @@ impl<'a> TypeConstraintGenerator<'a> for ExprKind<'_, '_> {
     }
 }
 
+/// The types of ways in which a block could have returns in it
+/// TODO: explicit return
+pub enum BlockReturn {
+    /// last item has semi, unit return
+    None,
+    /// return expression
+    Implicit(NodeId),
+}
+
 impl<'a> TypeConstraintGenerator<'a> for Identified<Block<'_, '_>> {
-    type TypeResult = TypeVariable;
+    type TypeResult = (TypeVariable, BlockReturn);
 
     fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
         for i in self.value.stmts {
@@ -120,9 +172,12 @@ impl<'a> TypeConstraintGenerator<'a> for Identified<Block<'_, '_>> {
         }
 
         if let Some(ref last) = self.value.last {
-            last.generate_constraints(ctx)
+            (
+                last.generate_constraints(ctx),
+                BlockReturn::Implicit(last.node_id),
+            )
         } else {
-            ctx.concrete_type(ConcreteType::Unit)
+            (ctx.concrete_type(ConcreteType::Unit), BlockReturn::None)
         }
     }
 }
@@ -152,11 +207,25 @@ impl<'a> TypeConstraintGenerator<'a> for Statement<'_, '_> {
                 let value_type = value.generate_constraints(ctx);
 
                 let name_ty = ctx.type_of_name(name);
-                ctx.add_equal_constraint(name_ty, value_type);
+                ctx.add_equal_constraint(
+                    name_ty,
+                    value_type,
+                    ConstraintMetadata::Assignment {
+                        name: name.node_id,
+                        value: value.node_id,
+                    },
+                );
 
                 if let Some(spec) = type_spec {
                     let spec_ty = spec.generate_constraints(ctx);
-                    ctx.add_equal_constraint(value_type, spec_ty);
+                    ctx.add_equal_constraint(
+                        value_type,
+                        spec_ty,
+                        ConstraintMetadata::TypeSpec {
+                            spec: spec.node_id,
+                            name: name.node_id,
+                        },
+                    );
                 }
             }
         }
@@ -219,7 +288,14 @@ impl<'a> TypeConstraintGenerator<'a> for Identified<Function<'_, '_>> {
             let param_ty = ctx.type_of_name(name);
             let spec_ty = type_spec.generate_constraints(ctx);
 
-            ctx.add_equal_constraint(param_ty, spec_ty);
+            ctx.add_equal_constraint(
+                param_ty,
+                spec_ty,
+                ConstraintMetadata::TypeSpec {
+                    spec: type_spec.node_id,
+                    name: name.node_id,
+                },
+            );
 
             param_types.push(param_ty);
         }
@@ -240,10 +316,23 @@ impl<'a> TypeConstraintGenerator<'a> for Identified<Function<'_, '_>> {
 
         // the function name has this type
         let name = ctx.type_of_name(name);
-        ctx.add_equal_constraint_concrete(name, function_type);
+        ctx.add_equal_constraint_concrete(
+            name,
+            function_type,
+            ConstraintMetadata::FunctionDefinition {
+                value: self.node_id,
+            },
+        );
 
         // and the block should return this type
-        let block_ret_ty = block.generate_constraints(ctx);
-        ctx.add_equal_constraint(block_ret_ty, ret_ty_spec);
+        let (block_ret_ty, ret) = block.generate_constraints(ctx);
+        ctx.add_equal_constraint(
+            block_ret_ty,
+            ret_ty_spec,
+            ConstraintMetadata::FunctionReturn {
+                function: self.node_id,
+                ret,
+            },
+        );
     }
 }
