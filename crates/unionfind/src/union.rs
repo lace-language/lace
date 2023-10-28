@@ -16,4 +16,3 @@ where
         Ok((self)(a, b))
     }
 }
-

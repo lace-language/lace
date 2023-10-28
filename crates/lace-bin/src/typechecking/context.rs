@@ -8,6 +8,8 @@ use bumpalo::Bump;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+pub type TypeMapping<'a> = HashMap<TypeVariable, ConcreteType<'a>>;
+
 pub struct TypeContext<'a> {
     /// Stores arrays of type variables needed for some concrete types,
     /// as well as any other allocation. It's more efficient in bump than on the real heap
@@ -25,7 +27,7 @@ pub struct TypeContext<'a> {
     pub name_mapping: HashMap<NodeId, TypeVariable>,
     /// Stores a mapping from type variables to concrete types
     // TODO: replace with FxHashMap
-    pub type_mapping: HashMap<TypeVariable, ConcreteType<'a>>,
+    pub type_mapping: TypeMapping<'a>,
 }
 
 impl<'a> TypeContext<'a> {

@@ -1,3 +1,18 @@
+
+/// Used after type checking, contains no unresolved types
+#[derive(Copy, Clone)]
+pub enum Type<'a> {
+    Int,
+    Bool,
+    Function {
+        params: &'a [Type<'a>],
+        ret: &'a Type<'a>,
+    },
+    Tuple(&'a [Type<'a>]),
+    String,
+}
+
+/// Used during type checking, contains unresolved types (type variables)
 #[derive(Copy, Clone)]
 pub enum ConcreteType<'a> {
     Int,
