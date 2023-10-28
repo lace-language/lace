@@ -28,14 +28,6 @@ pub fn typecheck<'a, 'newa>(
     type_context.add_name_resolutions(name_resolutions);
     type_context.save_debug(spans, source);
 
-    let TypeContext {
-        variable_generator,
-        constraints,
-        name_mapping,
-        type_mapping,
-        ..
-    } = type_context;
-
-    let solver = Solver::new(variable_generator);
-    solver.apply_constraints(constraints, type_mapping, name_mapping)
+    let solver = Solver::from_type_context(type_context);
+    solver.solve()
 }

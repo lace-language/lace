@@ -1,22 +1,40 @@
 use crate::lice::Lice;
 use crate::syntax_id::NodeId;
 use crate::typechecking::constraint::Constraint;
-use crate::typechecking::context::{NameMapping, TypeMapping};
+use crate::typechecking::context::{NameMapping, TypeContext, TypeMapping};
 use crate::typechecking::error::TypeError;
 use crate::typechecking::ty::{ConcreteType, Type, TypeVariable, TypeVariableGenerator};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use unionfind::VecUnionFind;
 
-pub struct UnifyState<'x, 'a> {
-    new_constraints: Vec<Constraint>,
-    type_mapping: &'x TypeMapping<'a>,
-    error: Result<(), TypeError>
+type SolveState = VecUnionFind<usize>;
+
+pub struct Solver<'a> {
+    variable_generator: TypeVariableGenerator,
+    constraints: Vec<Constraint>,
+    type_mapping: TypeMapping<'a>,
+    name_mapping: NameMapping,
+    errors: Vec<TypeError>,
 }
 
+impl<'a> Solver<'a> {
+    pub fn from_type_context(
+        ctx: TypeContext<'a>
+    ) -> Self {
+        Self {
+            variable_generator: ctx.variable_generator,
+            constraints: ctx.constraints,
+            type_mapping: ctx.type_mapping,
+            name_mapping: ctx.name_mapping,
+            errors: vec![],
+        }
+    }
 
+    fn cant_unify(&mut self, ca: &ConcreteType, cb: &ConcreteType, a: TypeVariable, b: TypeVariable) {
 
-impl<'x, 'a> UnifyState<'x, 'a> {
+    }
+
     fn unify_one(&mut self, a: TypeVariable, b: TypeVariable) -> TypeVariable {
         // look up if any correspond to concrete types we know
         let type_a = self.type_mapping.get(&a);
@@ -35,30 +53,41 @@ impl<'x, 'a> UnifyState<'x, 'a> {
             // the same or that we went ahead with the wrong type.
             (Some(concrete_a), Some(concrete_b)) => {
                 match (concrete_a, concrete_b) {
-                    (ConcreteType::Int, ConcreteType::Int) => {},
-                    (ConcreteType::Bool, ConcreteType::Bool) => {},
-                    (ConcreteType::String, ConcreteType::String) => {},
+                    (ConcreteType::Int, ConcreteType::Int) => {}
+                    (ConcreteType::Bool, ConcreteType::Bool) => {}
+                    (ConcreteType::String, ConcreteType::String) => {}
                     (ConcreteType::Tuple(elems_a), ConcreteType::Tuple(elems_b)) => {
-                        self.new_constraints.extend(
-                            elems_a.iter().copied()
+                        self.constraints.extend(
+                            elems_a
+                                .iter()
+                                .copied()
                                 .zip(elems_b.iter().copied())
-                                .map(|(x, y)| Constraint::Equal(x, y))
+                                .map(|(x, y)| Constraint::Equal(x, y)),
                         );
-                    },
+                    }
                     (
-                        ConcreteType::Function{params: params_a, ret: ret_a},
-                        ConcreteType::Function{params: params_b, ret: ret_b}
+                        ConcreteType::Function {
+                            params: params_a,
+                            ret: ret_a,
+                        },
+                        ConcreteType::Function {
+                            params: params_b,
+                            ret: ret_b,
+                        },
                     ) => {
-                        self.new_constraints.extend(
-                            params_a.iter().copied()
+                        self.constraints.extend(
+                            params_a
+                                .iter()
+                                .copied()
                                 .zip(params_b.iter().copied())
-                                .map(|(x, y)| Constraint::Equal(x, y))
+                                .map(|(x, y)| Constraint::Equal(x, y)),
                         );
-                        self.new_constraints.push(Constraint::Equal(**ret_a, **ret_b));
-                    },
+                        self.constraints
+                            .push(Constraint::Equal(**ret_a, **ret_b));
+                    }
 
-                    (a, b) => {
-                        panic!("type error: {a:?} != {b:?}")
+                    (ca, cb) => {
+                        self.cant_unify(ca, cb, a, b);
                     }
                 }
 
@@ -66,66 +95,39 @@ impl<'x, 'a> UnifyState<'x, 'a> {
             }
         }
     }
-}
 
-pub struct Solver {
-    uf: VecUnionFind<usize>,
-    errors: Vec<TypeError>,
-}
-
-impl Solver {
-    pub fn new(variable_generator: TypeVariableGenerator) -> Self {
-        Self {
-            uf: VecUnionFind::new(0..=variable_generator.num_generated())
-                .unwrap_or_lice("always increasing")
-            ,
-            errors: vec![],
-        }
-    }
-
-    fn unify(&mut self, a: TypeVariable, b: TypeVariable, type_mapping: &TypeMapping) -> Vec<Constraint> {
-        let mut us = UnifyState {
-            new_constraints: Vec::new(),
-            type_mapping,
-            error: Ok(()),
-        };
-
-        self.uf.union_by(
-            &a.as_usize(),
-            &b.as_usize(),
-            |a, b| {
-                let res = us.unify_one(
-                    TypeVariable::from_usize(a),
-                    TypeVariable::from_usize(b),
-                );
+    fn unify(
+        &mut self,
+        a: TypeVariable,
+        b: TypeVariable,
+        uf: &mut SolveState,
+    ) {
+        uf
+            .union_by(&a.as_usize(), &b.as_usize(), |a, b| {
+                let res = self.unify_one(TypeVariable::from_usize(a), TypeVariable::from_usize(b));
 
                 res.as_usize()
-            },
-        )
+            })
             .unwrap_or_lice("all variables were inserted at the start");
-
-        if let Err(e) = us.error {
-            self.errors.push(e);
-        }
-
-        us.new_constraints
     }
 
-    pub fn apply_constraints(mut self, mut constraints: Vec<Constraint>, type_mapping: TypeMapping, name_mapping: NameMapping) -> Result<SolvedTypes, TypeError> {
-        while let Some(constraint) = constraints.pop() {
+    pub fn solve(mut self) -> Result<SolvedTypes<'a>, TypeError> {
+        let mut uf = VecUnionFind::new(0..=self.variable_generator.num_generated())
+            .unwrap_or_lice("always increasing");
+
+        while let Some(constraint) = self.constraints.pop() {
             match constraint {
                 Constraint::Equal(a, b) => {
                     // pass uf explicitly
-                    let new_constraints = self.unify(a, b, &type_mapping);
-                    constraints.extend(new_constraints);
+                    self.unify(a, b, &mut uf);
                 }
             }
         }
 
         Ok(SolvedTypes {
-            name_mapping,
-            type_mapping,
-            uf: self.uf,
+            name_mapping: self.name_mapping,
+            type_mapping: self.type_mapping,
+            uf,
         })
     }
 }
