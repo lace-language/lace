@@ -1,4 +1,6 @@
-use std::{collections::BTreeMap, ops::Deref};
+use std::io::Write;
+use std::path::Path;
+use std::{collections::BTreeMap, fs, ops::Deref};
 
 use crate::parser::{
     ast::{Block, Expr, ExprKind, File, Ident, Item, Statement},
@@ -17,7 +19,7 @@ use stack_graphs::{
 mod tests;
 
 pub struct NameResolutions {
-    pub(crate) names: Vec<(NodeId, NodeId)>
+    pub(crate) names: Vec<(NodeId, NodeId)>,
 }
 
 pub struct Graph {
@@ -248,17 +250,19 @@ impl<'s, 'a> Graph {
         }
     }
 
-    pub fn print(&self) {
-        print!(
-            "{}",
+    pub fn save(&self, name: impl AsRef<Path>) {
+        let mut f = fs::File::create(name).unwrap();
+        f.write_all(
             self.graph
                 .to_html_string(
                     "",
                     &mut PartialPaths::new(),
                     &mut Database::new(),
-                    &NoFilter
+                    &NoFilter,
                 )
                 .unwrap()
-        );
+                .as_bytes(),
+        )
+        .unwrap();
     }
 }

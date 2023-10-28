@@ -5,20 +5,20 @@ mod ice;
 mod error;
 mod lexer;
 mod name_resolution;
-mod typechecking;
 mod parser;
 mod source_file;
+mod typechecking;
 
 use crate::error::{CompilerError, ResultExt};
 use crate::parser::ast::Ast;
 use crate::source_file::SourceFile;
+use crate::typechecking::typecheck;
 use bumpalo::Bump;
 use clap::{self, Parser as ClapParser};
 use lexer::token_buffer::TokenBuffer;
 use miette::LabeledSpan;
 use miette::Report;
 use parser::Parser;
-use crate::typechecking::typecheck;
 
 #[derive(ClapParser)]
 #[command(author, version, about, long_about = None)]
@@ -38,7 +38,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     let resolved = graph.resolve(&ast);
 
     // For debugging:
-    graph.print();
+    graph.save("graph.html");
 
     eprintln!("resolved {}", !resolved.names.len());
     for (from, to) in &resolved.names {

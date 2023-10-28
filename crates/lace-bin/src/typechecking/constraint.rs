@@ -1,5 +1,5 @@
 use crate::typechecking::context::TypeContext;
-use crate::typechecking::ty::TypeOrVariable;
+use crate::typechecking::ty::TypeVariable;
 
 pub trait TypeConstraintGenerator<'a> {
     type TypeResult;
@@ -7,6 +7,6 @@ pub trait TypeConstraintGenerator<'a> {
     fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult;
 }
 
-pub enum Constraint<'a> {
-    Equal(TypeOrVariable<'a>, TypeOrVariable<'a>)
+pub enum Constraint {
+    Equal(TypeVariable, TypeVariable),
 }

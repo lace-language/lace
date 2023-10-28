@@ -1,32 +1,49 @@
 #[derive(Copy, Clone)]
-pub enum PartialType<'a> {
+pub enum ConcreteType<'a> {
     Int,
     Bool,
     Function {
-        params: &'a [TypeOrVariable<'a>],
-        ret: &'a TypeOrVariable<'a>
+        params: &'a [TypeVariable],
+        ret: &'a TypeVariable,
     },
-    Tuple(&'a [TypeOrVariable<'a>]),
+    Tuple(&'a [TypeVariable]),
     String,
 }
 
-impl<'a> PartialType<'a> {
+impl<'a> ConcreteType<'a> {
     #[allow(non_upper_case_globals)]
     pub const Unit: Self = Self::Tuple(&[]);
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct TypeVariable(u64);
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct TypeVariable(usize);
 
+impl TypeVariable {
+    /// This operation is explicit instead of a public first field so that
+    /// it is harder to accidentally do and easier to control-f for.
+    pub fn from_usize(v: usize) -> Self {
+        Self(v)
+    }
+
+    /// This operation is explicit instead of a public first field so that
+    /// it is harder to accidentally do and easier to control-f for.
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
+}
+
+/// generates new type variables in increasing order.
 pub struct TypeVariableGenerator {
-    curr: u64
+    curr: usize,
 }
 
 impl TypeVariableGenerator {
     pub fn new() -> Self {
-        Self {
-            curr: 0,
-        }
+        Self { curr: 0 }
+    }
+
+    pub fn num_generated(&self) -> usize {
+        self.curr - 1
     }
 
     pub fn next(&mut self) -> TypeVariable {
@@ -39,12 +56,12 @@ impl TypeVariableGenerator {
 #[derive(Copy, Clone)]
 #[must_use]
 pub enum TypeOrVariable<'a> {
-    Concrete(PartialType<'a>),
-    Variable(TypeVariable)
+    Concrete(ConcreteType<'a>),
+    Variable(TypeVariable),
 }
 
-impl<'a> From<PartialType<'a>> for TypeOrVariable<'a> {
-    fn from(value: PartialType<'a>) -> Self {
+impl<'a> From<ConcreteType<'a>> for TypeOrVariable<'a> {
+    fn from(value: ConcreteType<'a>) -> Self {
         Self::Concrete(value)
     }
 }
@@ -54,4 +71,3 @@ impl<'a> From<TypeVariable> for TypeOrVariable<'a> {
         Self::Variable(value)
     }
 }
-
