@@ -1,3 +1,4 @@
+use derive_more::From;
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::source_file::SourceFile;
@@ -19,7 +20,14 @@ pub enum CompilerError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Type(#[from] TypeError),
+    Type(#[from] TypeErrors),
+}
+
+#[derive(Debug, Error, Diagnostic, From, Clone, PartialEq)]
+#[error("type errors")]
+pub struct TypeErrors {
+    #[related]
+    errors: Vec<TypeError>
 }
 
 pub trait ResultExt<T> {

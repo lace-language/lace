@@ -13,6 +13,7 @@ use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::io::Write;
+use crate::typechecking::error::TypeError;
 
 // TODO: replace with FxHashMap
 /// Maps concrete types to type variables
@@ -21,7 +22,7 @@ pub type TypeMapping<'a> = HashMap<TypeVariable, ConcreteType<'a>>;
 /// Maps identifiers from the source code to type variables
 pub type NameMapping = HashMap<NodeId, TypeVariable>;
 
-pub struct TypeContext<'a> {
+pub struct TypeContext<'a, 'sp> {
     /// Stores arrays of type variables needed for some concrete types,
     /// as well as any other allocation. It's more efficient in bump than on the real heap
     pub arena: &'a Bump,
@@ -37,16 +38,22 @@ pub struct TypeContext<'a> {
     pub name_mapping: NameMapping,
     /// Stores a mapping from type variables to concrete types
     pub type_mapping: TypeMapping<'a>,
+
+    pub errors: Vec<TypeError>,
+
+    pub spans: &'sp Spans,
 }
 
-impl<'a> TypeContext<'a> {
-    pub fn new(arena: &'a Bump) -> Self {
+impl<'a, 'sp> TypeContext<'a, 'sp> {
+    pub fn new(arena: &'a Bump, spans: &'sp Spans) -> Self {
         Self {
             variable_generator: TypeVariableGenerator::new(),
             arena,
             constraints: vec![],
             name_mapping: Default::default(),
             type_mapping: Default::default(),
+            errors: vec![],
+            spans,
         }
     }
 

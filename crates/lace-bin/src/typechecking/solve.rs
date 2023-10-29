@@ -11,10 +11,40 @@ use unionfind::VecUnionFind;
 
 type SolveState = VecUnionFind<usize>;
 
-impl<'a> TypeContext<'a> {
+impl<'a, 'sp> TypeContext<'a, 'sp> {
     #[allow(unused)]
-    fn cant_unify(&mut self, ca: ConcreteType, cb: ConcreteType, a: TypeVariable, b: TypeVariable) {
-        todo!()
+    fn cant_unify(&mut self, ca: ConcreteType, cb: ConcreteType, a: TypeVariable, b: TypeVariable, meta: ConstraintMetadata) {
+        println!("can't unify {ca} == {cb}");
+        match meta {
+            ConstraintMetadata::NoConstraintMetadata => lice!("no constrain metadata"),
+            ConstraintMetadata::BinaryOp(left, right, op) => {
+                self.errors.push(TypeError::BinaryOp {
+                    op,
+                    left_ty: ca.to_string(),
+                    right_ty: cb.to_string(),
+                    left: self.spans.get(left),
+                    right: self.spans.get(right),
+                })
+            }
+            ConstraintMetadata::UnaryOp(expr, op) => {
+                self.errors.push(TypeError::UnaryOp {
+                    op,
+                    ty: ca.to_string(),
+                    expr: self.spans.get(expr),
+                })
+            },
+            ConstraintMetadata::BlockCondition(_) => todo!(),
+            ConstraintMetadata::IfReturn(_, _) => todo!(),
+            ConstraintMetadata::Call { .. } => todo!(),
+            ConstraintMetadata::TypeSpec { .. } => todo!(),
+            ConstraintMetadata::Assignment { .. } => todo!(),
+            ConstraintMetadata::FunctionDefinition { .. } => todo!(),
+            ConstraintMetadata::FunctionReturn { .. } => todo!(),
+            ConstraintMetadata::NameRef => todo!(),
+            ConstraintMetadata::TupleUnify { .. } => todo!(),
+            ConstraintMetadata::FunctionParamUnify { .. } => todo!(),
+            ConstraintMetadata::FunctionReturnUnify { .. } => todo!(),
+        }
     }
 
     fn unify_one(
@@ -82,7 +112,7 @@ impl<'a> TypeContext<'a> {
                     }
 
                     (ca, cb) => {
-                        self.cant_unify(ca, cb, a, b);
+                        self.cant_unify(ca, cb, a, b, meta);
                     }
                 }
 
@@ -110,7 +140,7 @@ impl<'a> TypeContext<'a> {
         .unwrap_or_lice("all variables were inserted at the start");
     }
 
-    pub fn solve(mut self) -> Result<SolvedTypes<'a>, TypeError> {
+    pub fn solve(mut self) -> Result<SolvedTypes<'a>, Vec<TypeError>> {
         let mut uf = VecUnionFind::new(0..=self.variable_generator.num_generated())
             .unwrap_or_lice("always increasing");
 
@@ -121,6 +151,10 @@ impl<'a> TypeContext<'a> {
                     self.unify(a, b, meta, &mut uf);
                 }
             }
+        }
+
+        if !self.errors.is_empty() {
+            return Err(self.errors)
         }
 
         Ok(SolvedTypes {
@@ -151,7 +185,7 @@ impl<'a> SolvedTypes<'a> {
         )
     }
 
-    fn resolve_type_recursive<'x>(&self, ty: TypeVariable, arena: &'x Bump) -> Type<'x> {
+    pub(super) fn resolve_type_recursive<'x>(&self, ty: TypeVariable, arena: &'x Bump) -> Type<'x> {
         let representative = self.find_representative(ty);
         let type_of_representative = self.type_mapping.get(&representative).unwrap_or_else(|| {
             lice!(

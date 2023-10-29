@@ -9,10 +9,10 @@ use crate::typechecking::context::TypeContext;
 use crate::typechecking::ty::{ConcreteType, TypeVariable};
 use bumpalo::collections::Vec;
 
-impl<'a> TypeConstraintGenerator<'a> for Expr<'_, '_> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
     type TypeResult = TypeVariable;
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         match &self.value {
             ExprKind::Lit(l) => l.generate_constraints(ctx),
             ExprKind::If(condition, if_true, if_false) => {
@@ -57,12 +57,12 @@ impl<'a> TypeConstraintGenerator<'a> for Expr<'_, '_> {
                     ctx.add_equal_constraint_concrete(
                         l_type,
                         ConcreteType::Int,
-                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
                     );
                     ctx.add_equal_constraint_concrete(
                         r_type,
                         ConcreteType::Int,
-                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
                     );
 
                     ctx.concrete_type(ConcreteType::Int)
@@ -74,12 +74,12 @@ impl<'a> TypeConstraintGenerator<'a> for Expr<'_, '_> {
                     ctx.add_equal_constraint_concrete(
                         l_type,
                         ConcreteType::Bool,
-                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
                     );
                     ctx.add_equal_constraint_concrete(
                         r_type,
                         ConcreteType::Bool,
-                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
                     );
 
                     ctx.concrete_type(ConcreteType::Bool)
@@ -96,7 +96,7 @@ impl<'a> TypeConstraintGenerator<'a> for Expr<'_, '_> {
                     ctx.add_equal_constraint(
                         l_type,
                         r_type,
-                        ConstraintMetadata::BinaryOp(self.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
                     );
 
                     ctx.concrete_type(ConcreteType::Bool)
@@ -105,7 +105,7 @@ impl<'a> TypeConstraintGenerator<'a> for Expr<'_, '_> {
             ExprKind::UnaryOp(op, expr) => {
                 let expr_type = expr.generate_constraints(ctx);
 
-                let meta = ConstraintMetadata::UnaryOp(self.node_id, op.value);
+                let meta = ConstraintMetadata::UnaryOp(expr.node_id, op.value);
                 match op.value {
                     UnaryOp::Not => {
                         ctx.add_equal_constraint_concrete(expr_type, ConcreteType::Bool, meta);
@@ -163,10 +163,10 @@ pub enum BlockReturn {
     Implicit(NodeId),
 }
 
-impl<'a> TypeConstraintGenerator<'a> for Identified<Block<'_, '_>> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Block<'_, '_>> {
     type TypeResult = (TypeVariable, BlockReturn);
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         for i in self.value.stmts {
             i.generate_constraints(ctx);
         }
@@ -182,10 +182,10 @@ impl<'a> TypeConstraintGenerator<'a> for Identified<Block<'_, '_>> {
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for Lit<'_> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Lit<'_> {
     type TypeResult = TypeVariable;
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         match self {
             Lit::Bool(_) => ctx.concrete_type(ConcreteType::Bool),
             Lit::Int(_) => ctx.concrete_type(ConcreteType::Int),
@@ -194,10 +194,10 @@ impl<'a> TypeConstraintGenerator<'a> for Lit<'_> {
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for Statement<'_, '_> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Statement<'_, '_> {
     type TypeResult = ();
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         match self {
             Statement::Expr(e) => {
                 // whatever :shrug:
@@ -232,10 +232,10 @@ impl<'a> TypeConstraintGenerator<'a> for Statement<'_, '_> {
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for TypeSpec<'_> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for TypeSpec<'_> {
     type TypeResult = TypeVariable;
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         match self {
             // TODO: somewhere make the distinction between primitives and compounds, if necessary
             TypeSpec::Name(n) => match n.value.string {
@@ -249,30 +249,30 @@ impl<'a> TypeConstraintGenerator<'a> for TypeSpec<'_> {
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for File<'_, '_> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for File<'_, '_> {
     type TypeResult = ();
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         for i in self.items {
             i.generate_constraints(ctx);
         }
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for Item<'_, '_> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Item<'_, '_> {
     type TypeResult = ();
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         match self {
             Item::Function(f) => f.generate_constraints(ctx),
         }
     }
 }
 
-impl<'a> TypeConstraintGenerator<'a> for Identified<Function<'_, '_>> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Function<'_, '_>> {
     type TypeResult = ();
 
-    fn generate_constraints(&self, ctx: &mut TypeContext<'a>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         let Function {
             name,
             parameters,

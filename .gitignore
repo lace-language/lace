@@ -3,3 +3,4 @@
 tarpaulin-report.html
 test.lc
 debug_output/
+tests/

@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use itertools::Itertools;
 
 /// Used after type checking, contains no unresolved types
 #[derive(Copy, Clone)]
@@ -64,6 +65,20 @@ pub enum ConcreteType<'a> {
     },
     Tuple(&'a [TypeVariable]),
     String,
+}
+
+impl<'a> Display for ConcreteType<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConcreteType::Int => write!(f, "int"),
+            ConcreteType::Bool => write!(f, "bool"),
+            ConcreteType::Function{ params, ..} => {
+                write!(f, "fn ({}) -> _", params.iter().map(|_| "_").join(","))
+            },
+            ConcreteType::Tuple(t) => write!(f, "({})", t.iter().map(|_| "_").join(",")),
+            ConcreteType::String => write!(f, "string"),
+        }
+    }
 }
 
 impl<'a> ConcreteType<'a> {

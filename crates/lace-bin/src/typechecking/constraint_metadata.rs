@@ -8,7 +8,7 @@ pub enum ConstraintMetadata<'a> {
     NoConstraintMetadata,
 
     /// Generated for binary operators
-    BinaryOp(NodeId, BinaryOp),
+    BinaryOp(NodeId, NodeId, BinaryOp),
     /// Generated for unary operators
     UnaryOp(NodeId, UnaryOp),
 
