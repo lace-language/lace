@@ -118,7 +118,7 @@ impl TypeVariableGenerator {
         self.curr - 1
     }
 
-    pub fn next(&mut self) -> TypeVariable {
+    pub fn fresh(&mut self) -> TypeVariable {
         let old = self.curr;
         self.curr += 1;
         TypeVariable(old)

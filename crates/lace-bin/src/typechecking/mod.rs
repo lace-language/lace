@@ -1,4 +1,4 @@
-use crate::name_resolution::NameResolutions;
+use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::Ast;
 use crate::parser::span::Spans;
 use crate::source_file::SourceFile;
@@ -16,13 +16,13 @@ pub mod error;
 pub mod solve;
 pub mod ty;
 
-pub fn typecheck<'a, 'newa>(
-    ast: &Ast<'_, 'a>,
-    name_resolutions: &NameResolutions,
+pub fn typecheck<'ast, 'types>(
+    ast: &Ast<'_, 'ast>,
+    name_resolutions: &ResolvedNames,
     spans: &Spans,
-    source: SourceFile<'a>,
-    arena: &'newa Bump,
-) -> Result<SolvedTypes<'newa>, Vec<TypeError>> {
+    source: SourceFile<'ast>,
+    arena: &'types Bump,
+) -> Result<SolvedTypes<'types>, Vec<TypeError>> {
     let mut type_context = TypeContext::new(arena, spans);
 
     ast.generate_constraints(&mut type_context);

@@ -217,7 +217,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Statement<'_, '_> {
                 );
 
                 if let Some(spec) = type_spec {
-                    let spec_ty = spec.generate_constraints(ctx);
+                    let spec_ty = spec.value.generate_constraints(ctx);
                     ctx.add_equal_constraint(
                         value_type,
                         spec_ty,
@@ -286,7 +286,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Function<'_, '_>> 
             let Parameter { name, type_spec } = i;
 
             let param_ty = ctx.type_of_name(name);
-            let spec_ty = type_spec.generate_constraints(ctx);
+            let spec_ty = type_spec.value.generate_constraints(ctx);
 
             ctx.add_equal_constraint(
                 param_ty,
@@ -302,7 +302,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Function<'_, '_>> 
 
         // return type
         let ret_ty_spec = if let Some(ret) = ret {
-            let ret_ty_spec = ret.generate_constraints(ctx);
+            let ret_ty_spec = ret.value.generate_constraints(ctx);
             ret_ty_spec
         } else {
             ctx.concrete_type(ConcreteType::Unit)

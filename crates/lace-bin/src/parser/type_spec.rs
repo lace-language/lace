@@ -6,7 +6,7 @@ use crate::syntax_id::{Identified, WithNodeId};
 impl<'s, 'a> Parser<'s, 'a> {
     pub(super) fn type_spec(&mut self) -> ParseResult<Identified<TypeSpec<'s>>> {
         let name = self.ident()?;
-        let span = name.span();
+        let span = name.node_id;
 
         Ok(TypeSpec::Name(name).with_node_id(span))
     }

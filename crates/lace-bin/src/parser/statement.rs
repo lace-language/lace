@@ -80,7 +80,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         if self.accept_optional(tok![else])?.is_some() {
             let else_block = if self.peek_is(tok![if])? {
                 let else_if = self.if_else()?;
-                let span = else_if.span();
+                let span = else_if.node_id;
                 Block {
                     stmts: &[],
                     last: Some(else_if),

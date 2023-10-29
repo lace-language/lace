@@ -28,7 +28,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             // now we look at the precedence and associativity of our operator,
             // and determine whether we should continue parsing more expression
             // or return back up
-            match operator.compatibility(last_operator) {
+            match operator.compatibility(&last_operator.value) {
                 Compatibility::Continue => lhs = self.binary_expr_rhs(lhs, operator)?,
                 Compatibility::Stop => break,
                 Compatibility::Incompatible => {

@@ -1,5 +1,5 @@
 use crate::debug_file::create_debug_file;
-use crate::name_resolution::NameResolutions;
+use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::Ident;
 use crate::parser::span::Spans;
 use crate::source_file::SourceFile;
@@ -7,8 +7,7 @@ use crate::syntax_id::{Identified, NodeId};
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::error::TypeError;
-use crate::typechecking::ty::TypeVariableGenerator;
-use crate::typechecking::ty::{ConcreteType, TypeVariable};
+use crate::typechecking::ty::{ConcreteType, TypeVariable, TypeVariableGenerator};
 use bumpalo::Bump;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
@@ -36,6 +35,7 @@ pub struct TypeContext<'a, 'sp> {
 
     /// Stores a mapping from identifiers to type variables
     pub name_mapping: NameMapping,
+
     /// Stores a mapping from type variables to concrete types
     pub type_mapping: TypeMapping<'a>,
 
@@ -61,13 +61,13 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         match self.name_mapping.entry(node_id) {
             Entry::Occupied(o) => *o.get(),
             Entry::Vacant(v) => {
-                let variable = self.variable_generator.next();
+                let variable = self.variable_generator.fresh();
                 *v.insert(variable)
             }
         }
     }
 
-    pub fn add_name_resolutions(&mut self, name_resolutions: &NameResolutions) {
+    pub fn add_name_resolutions(&mut self, name_resolutions: &ResolvedNames) {
         for (a, b) in &name_resolutions.names {
             let a = self.get_or_insert_name_mapping(*a);
             let b = self.get_or_insert_name_mapping(*b);
@@ -76,7 +76,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
     }
 
     pub fn fresh(&mut self) -> TypeVariable {
-        self.variable_generator.next()
+        self.variable_generator.fresh()
     }
 
     pub fn concrete_type(&mut self, ty: ConcreteType<'a>) -> TypeVariable {

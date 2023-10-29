@@ -1,5 +1,5 @@
+use std::collections::BTreeMap;
 use std::io::Write;
-use std::{collections::BTreeMap, ops::Deref};
 
 use crate::debug_file::create_debug_file;
 use crate::parser::ast::{Block, Expr, ExprKind, File, Ident, Item, Statement};
@@ -16,7 +16,7 @@ use stack_graphs::{
 #[cfg(test)]
 mod tests;
 
-pub struct NameResolutions {
+pub struct ResolvedNames {
     pub(crate) names: Vec<(NodeId, NodeId)>,
 }
 
@@ -59,7 +59,7 @@ impl<'s, 'a> Graph {
     ///
     /// This only creates a node. It is does not connect it to the graph.
     fn new_definition(&mut self, ident: &Identified<Ident<'s>>) -> Handle<Node> {
-        let symbol = self.add_symbol(ident.deref().string);
+        let symbol = self.add_symbol(ident.value.string);
         let node_id = self.new_node_id();
 
         self.id_map.insert(node_id, ident.node_id);
@@ -74,7 +74,7 @@ impl<'s, 'a> Graph {
     ///
     /// This only creates a node. It is does not connect it to the graph.
     fn new_reference(&mut self, ident: &Identified<Ident<'s>>) -> Handle<Node> {
-        let symbol = self.add_symbol(ident.deref().string);
+        let symbol = self.add_symbol(ident.value.string);
         let node_id = self.new_node_id();
         self.id_map.insert(node_id, ident.node_id);
 
@@ -97,7 +97,7 @@ impl<'s, 'a> Graph {
     }
 
     /// Resolve all names in the AST of a file.
-    pub fn resolve(&mut self, ast: &File<'s, 'a>) -> NameResolutions {
+    pub fn resolve(&mut self, ast: &File<'s, 'a>) -> ResolvedNames {
         let root = StackGraph::root_node();
 
         let module_scope = self.new_scope(false);
@@ -151,32 +151,30 @@ impl<'s, 'a> Graph {
             }
         }
 
-        NameResolutions {
+        ResolvedNames {
             names: no_shadow_results,
         }
     }
 
     fn item(&mut self, module: Handle<Node>, item: &Item<'s, 'a>) {
         let Item::Function(f) = item;
-        let f = f.deref();
 
-        let item_def = self.new_definition(&f.name);
+        let item_def = self.new_definition(&f.value.name);
         self.edge(module, item_def, 0);
 
         let internal_scope = self.new_scope(false);
         self.edge(internal_scope, module, 0);
 
-        for param in f.parameters {
+        for param in f.value.parameters {
             // The edge from the parameter to the definition has a higher precedence,
             // because the parameter should shadow previous bindings.
             let param_def = self.new_definition(&param.name);
             self.edge(internal_scope, param_def, 1);
         }
-        self.block(internal_scope, f.block);
+        self.block(internal_scope, f.value.block);
     }
 
     fn block(&mut self, scope: Handle<Node>, block: &Identified<Block<'s, 'a>>) {
-        let block = block.deref();
         let block_scope = self.new_scope(false);
         self.edge(block_scope, scope, 0);
 
@@ -184,7 +182,7 @@ impl<'s, 'a> Graph {
         // and is updated to the scope of any `let` we encounter in this block.
         let mut last_scope = block_scope;
 
-        for stmt in block.stmts {
+        for stmt in block.value.stmts {
             match stmt {
                 Statement::Expr(expr) => self.expr(last_scope, expr),
                 Statement::Let(ident, _, expr) => {
@@ -204,13 +202,13 @@ impl<'s, 'a> Graph {
             }
         }
 
-        if let Some(expr) = &block.last {
+        if let Some(expr) = &block.value.last {
             self.expr(last_scope, expr);
         }
     }
 
     fn expr(&mut self, scope: Handle<Node>, expr: &Expr<'s, 'a>) {
-        match expr.deref() {
+        match &expr.value {
             // Identifiers in expressions are references
             ExprKind::Ident(ident) => {
                 let ident_ref = self.new_reference(ident);
@@ -241,7 +239,7 @@ impl<'s, 'a> Graph {
             }
             ExprKind::Call(func, args) => {
                 self.expr(scope, func);
-                for arg in *args.deref() {
+                for arg in args.value {
                     self.expr(scope, arg);
                 }
             }
