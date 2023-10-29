@@ -1,8 +1,8 @@
-use derive_more::From;
 use crate::lexer::error::LexError;
 use crate::parser::error::ParseError;
 use crate::source_file::SourceFile;
 use crate::typechecking::error::TypeError;
+use derive_more::From;
 use miette::{Diagnostic, Report};
 use thiserror::Error;
 
@@ -27,7 +27,7 @@ pub enum CompilerError {
 #[error("type errors")]
 pub struct TypeErrors {
     #[related]
-    errors: Vec<TypeError>
+    errors: Vec<TypeError>,
 }
 
 pub trait ResultExt<T> {

@@ -6,6 +6,7 @@ use crate::source_file::SourceFile;
 use crate::syntax_id::{Identified, NodeId};
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
+use crate::typechecking::error::TypeError;
 use crate::typechecking::ty::TypeVariableGenerator;
 use crate::typechecking::ty::{ConcreteType, TypeVariable};
 use bumpalo::Bump;
@@ -13,7 +14,6 @@ use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::io::Write;
-use crate::typechecking::error::TypeError;
 
 // TODO: replace with FxHashMap
 /// Maps concrete types to type variables

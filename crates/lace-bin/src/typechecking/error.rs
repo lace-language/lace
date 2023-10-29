@@ -1,7 +1,7 @@
-use miette::Diagnostic;
-use thiserror::Error;
 use crate::parser::ast::{BinaryOp, UnaryOp};
 use crate::parser::span::Span;
+use miette::Diagnostic;
+use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Clone, Diagnostic)]
 #[diagnostic()]
@@ -24,6 +24,6 @@ pub enum TypeError {
         op: UnaryOp,
         ty: String,
         #[label]
-        expr: Span
+        expr: Span,
     },
 }

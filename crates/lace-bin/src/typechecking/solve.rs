@@ -13,7 +13,14 @@ type SolveState = VecUnionFind<usize>;
 
 impl<'a, 'sp> TypeContext<'a, 'sp> {
     #[allow(unused)]
-    fn cant_unify(&mut self, ca: ConcreteType, cb: ConcreteType, a: TypeVariable, b: TypeVariable, meta: ConstraintMetadata) {
+    fn cant_unify(
+        &mut self,
+        ca: ConcreteType,
+        cb: ConcreteType,
+        a: TypeVariable,
+        b: TypeVariable,
+        meta: ConstraintMetadata,
+    ) {
         println!("can't unify {ca} == {cb}");
         match meta {
             ConstraintMetadata::NoConstraintMetadata => lice!("no constrain metadata"),
@@ -26,13 +33,11 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                     right: self.spans.get(right),
                 })
             }
-            ConstraintMetadata::UnaryOp(expr, op) => {
-                self.errors.push(TypeError::UnaryOp {
-                    op,
-                    ty: ca.to_string(),
-                    expr: self.spans.get(expr),
-                })
-            },
+            ConstraintMetadata::UnaryOp(expr, op) => self.errors.push(TypeError::UnaryOp {
+                op,
+                ty: ca.to_string(),
+                expr: self.spans.get(expr),
+            }),
             ConstraintMetadata::BlockCondition(_) => todo!(),
             ConstraintMetadata::IfReturn(_, _) => todo!(),
             ConstraintMetadata::Call { .. } => todo!(),
@@ -154,7 +159,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         }
 
         if !self.errors.is_empty() {
-            return Err(self.errors)
+            return Err(self.errors);
         }
 
         Ok(SolvedTypes {

@@ -55,9 +55,9 @@ pub enum BinaryOp {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum UnaryOp {
-    #[display(fmt="!")]
+    #[display(fmt = "!")]
     Not,
-    #[display(fmt="-")]
+    #[display(fmt = "-")]
     Neg,
 }
 

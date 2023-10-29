@@ -1,5 +1,5 @@
-use std::fmt::{Display, Formatter};
 use itertools::Itertools;
+use std::fmt::{Display, Formatter};
 
 /// Used after type checking, contains no unresolved types
 #[derive(Copy, Clone)]
@@ -72,9 +72,9 @@ impl<'a> Display for ConcreteType<'a> {
         match self {
             ConcreteType::Int => write!(f, "int"),
             ConcreteType::Bool => write!(f, "bool"),
-            ConcreteType::Function{ params, ..} => {
+            ConcreteType::Function { params, .. } => {
                 write!(f, "fn ({}) -> _", params.iter().map(|_| "_").join(","))
-            },
+            }
             ConcreteType::Tuple(t) => write!(f, "({})", t.iter().map(|_| "_").join(",")),
             ConcreteType::String => write!(f, "string"),
         }
