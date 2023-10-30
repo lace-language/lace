@@ -7,7 +7,7 @@ use crate::source_file::SourceFile;
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::error::TypeError;
-use crate::typechecking::ty::{ConcreteType, TypeOrVariable, TypeVariable, TypeVariableGenerator};
+use crate::typechecking::ty::{PartialType, TypeOrVariable, TypeVariable, TypeVariableGenerator};
 use bumpalo::Bump;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
@@ -106,9 +106,9 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                 }
             }
             TypeOrVariable::Concrete(c) => match c {
-                ConcreteType::Int => "int".to_string(),
-                ConcreteType::Bool => "bool".to_string(),
-                ConcreteType::Function { params, ret } => format!(
+                PartialType::Int => "int".to_string(),
+                PartialType::Bool => "bool".to_string(),
+                PartialType::Function { params, ret } => format!(
                     "fn ({}) -> {}",
                     params
                         .iter()
@@ -116,13 +116,13 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                         .join(", "),
                     Self::name_of_type_var(inverse_name_mapping, spans, source, *ret)
                 ),
-                ConcreteType::Tuple(vars) => format!(
+                PartialType::Tuple(vars) => format!(
                     "({})",
                     vars.iter()
                         .map(|v| Self::name_of_type_var(inverse_name_mapping, spans, source, *v))
                         .join(", ")
                 ),
-                ConcreteType::String => "string".to_string(),
+                PartialType::String => "string".to_string(),
             },
         }
     }

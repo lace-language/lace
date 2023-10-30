@@ -56,7 +56,7 @@ impl Display for Type<'_> {
 
 /// Used during type checking, contains unresolved types (type variables)
 #[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
-pub enum ConcreteType<'a> {
+pub enum PartialType<'a> {
     Int,
     Bool,
     Function {
@@ -67,21 +67,21 @@ pub enum ConcreteType<'a> {
     String,
 }
 
-impl<'a> Display for ConcreteType<'a> {
+impl<'a> Display for PartialType<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConcreteType::Int => write!(f, "int"),
-            ConcreteType::Bool => write!(f, "bool"),
-            ConcreteType::Function { params, .. } => {
+            PartialType::Int => write!(f, "int"),
+            PartialType::Bool => write!(f, "bool"),
+            PartialType::Function { params, .. } => {
                 write!(f, "fn ({}) -> _", params.iter().map(|_| "_").join(","))
             }
-            ConcreteType::Tuple(t) => write!(f, "({})", t.iter().map(|_| "_").join(",")),
-            ConcreteType::String => write!(f, "string"),
+            PartialType::Tuple(t) => write!(f, "({})", t.iter().map(|_| "_").join(",")),
+            PartialType::String => write!(f, "string"),
         }
     }
 }
 
-impl<'a> ConcreteType<'a> {
+impl<'a> PartialType<'a> {
     #[allow(non_upper_case_globals)]
     pub const Unit: Self = Self::Tuple(&[]);
 }
@@ -109,12 +109,12 @@ impl TypeVariableGenerator {
 #[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
 #[must_use]
 pub enum TypeOrVariable<'a> {
-    Concrete(ConcreteType<'a>),
+    Concrete(PartialType<'a>),
     Variable(TypeVariable),
 }
 
-impl<'a> From<ConcreteType<'a>> for TypeOrVariable<'a> {
-    fn from(value: ConcreteType<'a>) -> Self {
+impl<'a> From<PartialType<'a>> for TypeOrVariable<'a> {
+    fn from(value: PartialType<'a>) -> Self {
         Self::Concrete(value)
     }
 }

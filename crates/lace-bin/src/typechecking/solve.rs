@@ -4,7 +4,7 @@ use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::{NameMapping, TypeContext};
 use crate::typechecking::error::TypeError;
-use crate::typechecking::ty::{ConcreteType, Type, TypeOrVariable, TypeVariable};
+use crate::typechecking::ty::{PartialType, Type, TypeOrVariable, TypeVariable};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use unionfind::HashUnionFind;
@@ -13,7 +13,7 @@ type SolveState<'a> = HashUnionFind<TypeOrVariable<'a>>;
 
 impl<'a, 'sp> TypeContext<'a, 'sp> {
     #[allow(unused)]
-    fn cant_unify(&mut self, a: ConcreteType, b: ConcreteType, meta: ConstraintMetadata) {
+    fn cant_unify(&mut self, a: PartialType, b: PartialType, meta: ConstraintMetadata) {
         println!("can't unify {a} == {b}");
         match meta {
             ConstraintMetadata::NoConstraintMetadata => lice!("no constrain metadata"),
@@ -65,10 +65,10 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
             // the same or that we went ahead with the wrong type.
             (TypeOrVariable::Concrete(concrete_a), TypeOrVariable::Concrete(concrete_b)) => {
                 match (concrete_a, concrete_b) {
-                    (ConcreteType::Int, ConcreteType::Int) => {}
-                    (ConcreteType::Bool, ConcreteType::Bool) => {}
-                    (ConcreteType::String, ConcreteType::String) => {}
-                    (ConcreteType::Tuple(elems_a), ConcreteType::Tuple(elems_b)) => {
+                    (PartialType::Int, PartialType::Int) => {}
+                    (PartialType::Bool, PartialType::Bool) => {}
+                    (PartialType::String, PartialType::String) => {}
+                    (PartialType::Tuple(elems_a), PartialType::Tuple(elems_b)) => {
                         if elems_a.len() != elems_b.len() {
                             self.cant_unify(
                                 concrete_a,
@@ -88,11 +88,11 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                         }
                     }
                     (
-                        ConcreteType::Function {
+                        PartialType::Function {
                             params: params_a,
                             ret: ret_a,
                         },
-                        ConcreteType::Function {
+                        PartialType::Function {
                             params: params_b,
                             ret: ret_b,
                         },
@@ -180,7 +180,7 @@ impl<'a> SolvedTypes<'a> {
     fn find_representative(
         &self,
         var: TypeOrVariable<'a>,
-    ) -> Result<ConcreteType<'a>, TypeVariable> {
+    ) -> Result<PartialType<'a>, TypeVariable> {
         match self
             .uf
             .find(&var)
@@ -199,9 +199,9 @@ impl<'a> SolvedTypes<'a> {
         let representative = self.find_representative(ty.into()).expect("");
 
         match representative {
-            ConcreteType::Int => Type::Int,
-            ConcreteType::Bool => Type::Bool,
-            ConcreteType::Function { params, ret } => {
+            PartialType::Int => Type::Int,
+            PartialType::Bool => Type::Bool,
+            PartialType::Function { params, ret } => {
                 let mut new_params = BumpVec::new_in(arena);
 
                 for i in params {
@@ -214,7 +214,7 @@ impl<'a> SolvedTypes<'a> {
                     ret: arena.alloc(self.resolve_type_recursive(*ret, arena)),
                 }
             }
-            ConcreteType::Tuple(t) => {
+            PartialType::Tuple(t) => {
                 let mut new = BumpVec::new_in(arena);
 
                 for i in t {
@@ -224,7 +224,7 @@ impl<'a> SolvedTypes<'a> {
 
                 Type::Tuple(new.into_bump_slice())
             }
-            ConcreteType::String => Type::String,
+            PartialType::String => Type::String,
         }
     }
 
