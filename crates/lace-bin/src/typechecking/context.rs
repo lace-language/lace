@@ -7,16 +7,13 @@ use crate::source_file::SourceFile;
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::error::TypeError;
-use crate::typechecking::ty::{ConcreteType, TypeVariable, TypeVariableGenerator};
+use crate::typechecking::ty::{PartialType, TypeOrVariable, TypeVariable, TypeVariableGenerator};
 use bumpalo::Bump;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::io::Write;
 
-// TODO: replace with FxHashMap
-/// Maps concrete types to type variables
-pub type TypeMapping<'a> = HashMap<TypeVariable, ConcreteType<'a>>;
 // TODO: replace with FxHashMap
 /// Maps identifiers from the source code to type variables
 pub type NameMapping = HashMap<MetadataId, TypeVariable>;
@@ -31,13 +28,10 @@ pub struct TypeContext<'a, 'sp> {
 
     /// stores constraints. Constraints can only reference type variables,
     /// not concrete types. This makes the union find phase quicker.
-    pub constraints: Vec<(Constraint, ConstraintMetadata<'a>)>,
+    pub constraints: Vec<(Constraint<'a>, ConstraintMetadata<'a>)>,
 
     /// Stores a mapping from identifiers to type variables
     pub name_mapping: NameMapping,
-
-    /// Stores a mapping from type variables to concrete types
-    pub type_mapping: TypeMapping<'a>,
 
     pub errors: Vec<TypeError>,
 
@@ -51,7 +45,6 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
             arena,
             constraints: vec![],
             name_mapping: Default::default(),
-            type_mapping: Default::default(),
             errors: vec![],
             spans,
         }
@@ -79,33 +72,18 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         self.variable_generator.fresh()
     }
 
-    pub fn concrete_type(&mut self, ty: ConcreteType<'a>) -> TypeVariable {
-        let var = self.fresh();
-        self.type_mapping.insert(var, ty);
-        var
-    }
-
     pub fn alloc<T>(&self, value: T) -> &'a T {
         self.arena.alloc(value)
     }
 
-    pub fn add_equal_constraint_concrete(
-        &mut self,
-        a: TypeVariable,
-        b: ConcreteType<'a>,
-        meta: ConstraintMetadata<'a>,
-    ) {
-        let b = self.concrete_type(b);
-        self.add_equal_constraint(a, b, meta);
-    }
-
     pub fn add_equal_constraint(
         &mut self,
-        a: TypeVariable,
-        b: TypeVariable,
+        a: impl Into<TypeOrVariable<'a>>,
+        b: impl Into<TypeOrVariable<'a>>,
         meta: ConstraintMetadata<'a>,
     ) {
-        self.constraints.push((Constraint::Equal(a, b), meta));
+        self.constraints
+            .push((Constraint::Equal(a.into(), b.into()), meta));
     }
 
     pub fn type_of_name(&mut self, ident: &Metadata<Ident>) -> TypeVariable {
@@ -113,37 +91,39 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
     }
 
     fn name_of_type_var(
-        &self,
         inverse_name_mapping: &HashMap<&TypeVariable, &MetadataId>,
         spans: &Spans,
         source: SourceFile,
-        var: TypeVariable,
+        var: TypeOrVariable<'a>,
     ) -> String {
-        if let Some(i) = inverse_name_mapping.get(&var) {
-            let span = spans.get(**i);
-            format!("variable {}", source.slice_span(span))
-        } else if let Some(i) = self.type_mapping.get(&var) {
-            match i {
-                ConcreteType::Int => "int".to_string(),
-                ConcreteType::Bool => "bool".to_string(),
-                ConcreteType::Function { params, ret } => format!(
+        match var {
+            TypeOrVariable::Variable(v) => {
+                if let Some(i) = inverse_name_mapping.get(&v) {
+                    let span = spans.get(**i);
+                    format!("variable {}", source.slice_span(span))
+                } else {
+                    format!("type variable {}", v.0)
+                }
+            }
+            TypeOrVariable::Concrete(c) => match c {
+                PartialType::Int => "int".to_string(),
+                PartialType::Bool => "bool".to_string(),
+                PartialType::Function { params, ret } => format!(
                     "fn ({}) -> {}",
                     params
                         .iter()
-                        .map(|v| self.name_of_type_var(inverse_name_mapping, spans, source, *v))
+                        .map(|v| Self::name_of_type_var(inverse_name_mapping, spans, source, *v))
                         .join(", "),
-                    self.name_of_type_var(inverse_name_mapping, spans, source, **ret)
+                    Self::name_of_type_var(inverse_name_mapping, spans, source, *ret)
                 ),
-                ConcreteType::Tuple(vars) => format!(
+                PartialType::Tuple(vars) => format!(
                     "({})",
                     vars.iter()
-                        .map(|v| self.name_of_type_var(inverse_name_mapping, spans, source, *v))
+                        .map(|v| Self::name_of_type_var(inverse_name_mapping, spans, source, *v))
                         .join(", ")
                 ),
-                ConcreteType::String => "string".to_string(),
-            }
-        } else {
-            format!("type variable {}", var.as_usize())
+                PartialType::String => "string".to_string(),
+            },
         }
     }
 
@@ -159,23 +139,15 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         for (Constraint::Equal(a, b), _) in &self.constraints {
             writeln!(
                 f,
-                "{: >40} == {:<40}       {} == {}",
-                self.name_of_type_var(&inverse_name_mapping, spans, source, *a),
-                self.name_of_type_var(&inverse_name_mapping, spans, source, *b),
-                a.as_usize(),
-                b.as_usize(),
+                "{: >40} == {:<40}",
+                Self::name_of_type_var(&inverse_name_mapping, spans, source, *a),
+                Self::name_of_type_var(&inverse_name_mapping, spans, source, *b),
             )
             .unwrap()
         }
 
         for _ in 0..5 {
             writeln!(f).unwrap();
-        }
-
-        writeln!(f, "concrete types variables:").unwrap();
-        for tv in self.type_mapping.keys() {
-            let name = self.name_of_type_var(&inverse_name_mapping, spans, source, *tv);
-            writeln!(f, "tv {} ==> {name}", tv.as_usize()).unwrap();
         }
     }
 }
