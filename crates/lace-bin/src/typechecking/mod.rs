@@ -18,15 +18,15 @@ pub mod ty;
 
 pub fn typecheck<'ast, 'types>(
     ast: &Ast<'_, 'ast>,
-    name_resolutions: &ResolvedNames,
+    resolved_names: &ResolvedNames,
     spans: &Spans,
     source: SourceFile<'ast>,
     arena: &'types Bump,
-) -> Result<SolvedTypes<'types>, Vec<TypeError>> {
+) -> Result<SolvedTypes<'types>, TypeError> {
     let mut type_context = TypeContext::new(arena, spans);
 
+    type_context.add_resolved_names(resolved_names);
     ast.generate_constraints(&mut type_context);
-    type_context.add_name_resolutions(name_resolutions);
     type_context.save_debug(spans, source);
-    type_context.solve()
+    type_context.solve(resolved_names)
 }

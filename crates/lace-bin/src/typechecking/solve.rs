@@ -1,9 +1,10 @@
 use crate::ast_metadata::MetadataId;
 use crate::lice::Lice;
+use crate::name_resolution::ResolvedNames;
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::{NameMapping, TypeContext};
-use crate::typechecking::error::TypeError;
+use crate::typechecking::error::{ErrorContext, TypeError};
 use crate::typechecking::ty::{PartialType, Type, TypeOrVariable, TypeVariable};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
@@ -13,38 +14,9 @@ type SolveState<'a> = HashUnionFind<TypeOrVariable<'a>>;
 
 impl<'a, 'sp> TypeContext<'a, 'sp> {
     #[allow(unused)]
-    fn cant_unify(&mut self, a: PartialType, b: PartialType, meta: ConstraintMetadata) {
+    fn cant_unify(&mut self, a: PartialType<'a>, b: PartialType<'a>, meta: ConstraintMetadata<'a>) {
         println!("can't unify {a} == {b}");
-        match meta {
-            ConstraintMetadata::NoConstraintMetadata => lice!("no constrain metadata"),
-            ConstraintMetadata::BinaryOp(left, right, op) => {
-                self.errors.push(TypeError::BinaryOp {
-                    op,
-                    left_ty: a.to_string(),
-                    right_ty: b.to_string(),
-                    left: self.spans.get(left),
-                    right: self.spans.get(right),
-                })
-            }
-            ConstraintMetadata::UnaryOp(expr, op) => self.errors.push(TypeError::UnaryOp {
-                op,
-                ty: a.to_string(),
-                expr: self.spans.get(expr),
-            }),
-            ConstraintMetadata::BlockCondition(_) => todo!(),
-            ConstraintMetadata::IfReturn(_, _) => todo!(),
-            ConstraintMetadata::Call { .. } => todo!(),
-            ConstraintMetadata::TypeSpec { .. } => todo!(),
-            ConstraintMetadata::Assignment { .. } => todo!(),
-            ConstraintMetadata::FunctionDefinition { .. } => todo!(),
-            ConstraintMetadata::FunctionReturn { .. } => todo!(),
-            ConstraintMetadata::NameRef => todo!(),
-            ConstraintMetadata::TupleUnify { .. } => todo!(),
-            ConstraintMetadata::FunctionParamUnify { .. } => todo!(),
-            ConstraintMetadata::FunctionReturnUnify { .. } => todo!(),
-            ConstraintMetadata::ParamLength => todo!(),
-            ConstraintMetadata::TupleLength => todo!(),
-        }
+        self.unification_failures.push((a, b, meta));
     }
 
     fn unify_one(
@@ -143,10 +115,10 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
             .unwrap_or_lice("all variables were inserted at the start");
     }
 
-    pub fn solve(mut self) -> Result<SolvedTypes<'a>, Vec<TypeError>> {
+    pub fn solve(mut self, names: &ResolvedNames) -> Result<SolvedTypes<'a>, TypeError> {
         let mut uf = SolveState::new(std::iter::empty()).unwrap_or_lice("empty iterator");
 
-        while let Some((constraint, meta)) = self.constraints.pop() {
+        while let Some((constraint, meta)) = self.constraints.pop_front() {
             match constraint {
                 Constraint::Equal(a, b) => {
                     // pass uf explicitly
@@ -155,14 +127,23 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
             }
         }
 
-        if !self.errors.is_empty() {
-            return Err(self.errors);
-        }
-
-        Ok(SolvedTypes {
+        let solved_types = SolvedTypes {
             name_mapping: self.name_mapping,
             uf,
-        })
+        };
+
+        if !self.unification_failures.is_empty() {
+            let ectx = ErrorContext {
+                unification_failures: self.unification_failures,
+                names,
+                spans: self.spans,
+                solved_types,
+            };
+
+            Err(ectx.into_type_error())
+        } else {
+            Ok(solved_types)
+        }
     }
 }
 

@@ -6,12 +6,11 @@ use crate::parser::span::Spans;
 use crate::source_file::SourceFile;
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
-use crate::typechecking::error::TypeError;
 use crate::typechecking::ty::{PartialType, TypeOrVariable, TypeVariable, TypeVariableGenerator};
 use bumpalo::Bump;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::Write;
 
 // TODO: replace with FxHashMap
@@ -28,12 +27,12 @@ pub struct TypeContext<'a, 'sp> {
 
     /// stores constraints. Constraints can only reference type variables,
     /// not concrete types. This makes the union find phase quicker.
-    pub constraints: Vec<(Constraint<'a>, ConstraintMetadata<'a>)>,
+    pub constraints: VecDeque<(Constraint<'a>, ConstraintMetadata<'a>)>,
 
     /// Stores a mapping from identifiers to type variables
     pub name_mapping: NameMapping,
 
-    pub errors: Vec<TypeError>,
+    pub unification_failures: Vec<(PartialType<'a>, PartialType<'a>, ConstraintMetadata<'a>)>,
 
     pub spans: &'sp Spans,
 }
@@ -43,9 +42,9 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         Self {
             variable_generator: TypeVariableGenerator::new(),
             arena,
-            constraints: vec![],
+            constraints: VecDeque::new(),
             name_mapping: Default::default(),
-            errors: vec![],
+            unification_failures: vec![],
             spans,
         }
     }
@@ -60,8 +59,8 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         }
     }
 
-    pub fn add_name_resolutions(&mut self, name_resolutions: &ResolvedNames) {
-        for (a, b) in &name_resolutions.names {
+    pub fn add_resolved_names(&mut self, resolved_names: &ResolvedNames) {
+        for (a, b) in &resolved_names.names {
             let a = self.get_or_insert_name_mapping(*a);
             let b = self.get_or_insert_name_mapping(*b);
             self.add_equal_constraint(a, b, ConstraintMetadata::NameRef);
@@ -83,7 +82,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         meta: ConstraintMetadata<'a>,
     ) {
         self.constraints
-            .push((Constraint::Equal(a.into(), b.into()), meta));
+            .push_back((Constraint::Equal(a.into(), b.into()), meta));
     }
 
     pub fn type_of_name(&mut self, ident: &Metadata<Ident>) -> TypeVariable {

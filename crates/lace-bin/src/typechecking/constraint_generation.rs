@@ -57,7 +57,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     ctx.add_equal_constraint(
                         l_type,
                         PartialType::Int,
-                        ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
+                        ConstraintMetadata::BinaryOp(r.metadata, l.metadata, op.value),
                     );
                     ctx.add_equal_constraint(
                         r_type,
