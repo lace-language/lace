@@ -49,6 +49,8 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
             ConstraintMetadata::TupleUnify { .. } => todo!(),
             ConstraintMetadata::FunctionParamUnify { .. } => todo!(),
             ConstraintMetadata::FunctionReturnUnify { .. } => todo!(),
+            ConstraintMetadata::ParamLength => todo!(),
+            ConstraintMetadata::TupleLength => todo!(),
         }
     }
 
@@ -79,6 +81,16 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                     (ConcreteType::Bool, ConcreteType::Bool) => {}
                     (ConcreteType::String, ConcreteType::String) => {}
                     (ConcreteType::Tuple(elems_a), ConcreteType::Tuple(elems_b)) => {
+                        if elems_a.len() != elems_b.len() {
+                            self.cant_unify(
+                                concrete_a,
+                                concrete_b,
+                                a,
+                                b,
+                                ConstraintMetadata::TupleLength,
+                            );
+                        }
+
                         let meta = self.alloc(meta);
 
                         for (x, y) in elems_a.iter().zip(elems_b) {
@@ -99,6 +111,16 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                             ret: ret_b,
                         },
                     ) => {
+                        if params_a.len() != params_b.len() {
+                            self.cant_unify(
+                                concrete_a,
+                                concrete_b,
+                                a,
+                                b,
+                                ConstraintMetadata::ParamLength,
+                            );
+                        }
+
                         let meta = self.alloc(meta);
 
                         for (x, y) in params_a.iter().zip(params_b) {

@@ -63,4 +63,6 @@ pub enum ConstraintMetadata<'a> {
     FunctionReturnUnify {
         orig: &'a ConstraintMetadata<'a>,
     },
+    ParamLength,
+    TupleLength,
 }
