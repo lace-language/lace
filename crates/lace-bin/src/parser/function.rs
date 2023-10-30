@@ -1,8 +1,8 @@
+use crate::ast_metadata::{Metadata, WithNodeId};
 use crate::lexer::token::Token;
 use crate::parser::ast::{Function, Parameter};
 use crate::parser::error::ParseResult;
 use crate::parser::Parser;
-use crate::syntax_id::{Identified, WithNodeId};
 use bumpalo::collections::Vec;
 
 impl<'s, 'a> Parser<'s, 'a> {
@@ -39,7 +39,7 @@ impl<'s, 'a> Parser<'s, 'a> {
         Ok(parameters.into_bump_slice())
     }
 
-    pub(super) fn parse_function(&mut self) -> ParseResult<Identified<Function<'s, 'a>>> {
+    pub(super) fn parse_function(&mut self) -> ParseResult<Metadata<Function<'s, 'a>>> {
         let start_span = self.accept_required(tok![fn])?;
 
         let name = self.ident()?;
@@ -59,6 +59,6 @@ impl<'s, 'a> Parser<'s, 'a> {
             ret,
             block: self.alloc(block),
         }
-        .with_node_id(fn_span))
+        .with_metadata(fn_span))
     }
 }

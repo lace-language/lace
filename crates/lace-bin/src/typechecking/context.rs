@@ -1,9 +1,9 @@
+use crate::ast_metadata::{Metadata, MetadataId};
 use crate::debug_file::create_debug_file;
 use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::Ident;
 use crate::parser::span::Spans;
 use crate::source_file::SourceFile;
-use crate::syntax_id::{Identified, NodeId};
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::error::TypeError;
@@ -19,7 +19,7 @@ use std::io::Write;
 pub type TypeMapping<'a> = HashMap<TypeVariable, ConcreteType<'a>>;
 // TODO: replace with FxHashMap
 /// Maps identifiers from the source code to type variables
-pub type NameMapping = HashMap<NodeId, TypeVariable>;
+pub type NameMapping = HashMap<MetadataId, TypeVariable>;
 
 pub struct TypeContext<'a, 'sp> {
     /// Stores arrays of type variables needed for some concrete types,
@@ -57,7 +57,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         }
     }
 
-    fn get_or_insert_name_mapping(&mut self, node_id: NodeId) -> TypeVariable {
+    fn get_or_insert_name_mapping(&mut self, node_id: MetadataId) -> TypeVariable {
         match self.name_mapping.entry(node_id) {
             Entry::Occupied(o) => *o.get(),
             Entry::Vacant(v) => {
@@ -108,13 +108,13 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         self.constraints.push((Constraint::Equal(a, b), meta));
     }
 
-    pub fn type_of_name(&mut self, ident: &Identified<Ident>) -> TypeVariable {
-        self.get_or_insert_name_mapping(ident.node_id)
+    pub fn type_of_name(&mut self, ident: &Metadata<Ident>) -> TypeVariable {
+        self.get_or_insert_name_mapping(ident.metadata)
     }
 
     fn name_of_type_var(
         &self,
-        inverse_name_mapping: &HashMap<&TypeVariable, &NodeId>,
+        inverse_name_mapping: &HashMap<&TypeVariable, &MetadataId>,
         spans: &Spans,
         source: SourceFile,
         var: TypeVariable,

@@ -1,5 +1,5 @@
+use crate::ast_metadata::MetadataId;
 use crate::lice::Lice;
-use crate::syntax_id::NodeId;
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::{NameMapping, TypeContext, TypeMapping};
@@ -229,7 +229,7 @@ impl<'a> SolvedTypes<'a> {
         }
     }
 
-    pub fn type_of_name<'x>(&self, name_node_id: NodeId, arena: &'x Bump) -> Option<Type<'x>> {
+    pub fn type_of_name<'x>(&self, name_node_id: MetadataId, arena: &'x Bump) -> Option<Type<'x>> {
         let typevar = self.name_mapping.get(&name_node_id)?;
         Some(self.resolve_type_recursive(*typevar, arena))
     }

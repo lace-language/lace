@@ -1,28 +1,24 @@
-use crate::syntax_id::Identified;
+use crate::ast_metadata::Metadata;
 use derive_more::Display;
 
-pub type Expr<'s, 'a> = Identified<ExprKind<'s, 'a>>;
+pub type Expr<'s, 'a> = Metadata<ExprKind<'s, 'a>>;
 
 /// Expressions
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprKind<'s, 'a> {
     Lit(Lit<'s>),
     If(
-        &'a Identified<Self>,
-        &'a Identified<Block<'s, 'a>>,
-        Option<&'a Identified<Block<'s, 'a>>>,
+        &'a Metadata<Self>,
+        &'a Metadata<Block<'s, 'a>>,
+        Option<&'a Metadata<Block<'s, 'a>>>,
     ),
-    Block(&'a Identified<Block<'s, 'a>>),
-    Ident(Identified<Ident<'s>>),
-    Paren(&'a Identified<Self>),
-    BinaryOp(
-        Identified<BinaryOp>,
-        &'a Identified<Self>,
-        &'a Identified<Self>,
-    ),
-    UnaryOp(Identified<UnaryOp>, &'a Identified<Self>),
-    Tuple(&'a [Identified<Self>]),
-    Call(&'a Identified<Self>, Identified<&'a [Identified<Self>]>),
+    Block(&'a Metadata<Block<'s, 'a>>),
+    Ident(Metadata<Ident<'s>>),
+    Paren(&'a Metadata<Self>),
+    BinaryOp(Metadata<BinaryOp>, &'a Metadata<Self>, &'a Metadata<Self>),
+    UnaryOp(Metadata<UnaryOp>, &'a Metadata<Self>),
+    Tuple(&'a [Metadata<Self>]),
+    Call(&'a Metadata<Self>, Metadata<&'a [Metadata<Self>]>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
@@ -68,23 +64,23 @@ pub struct Ident<'s> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TypeSpec<'s> {
-    Name(Identified<Ident<'s>>),
+    Name(Metadata<Ident<'s>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Parameter<'s> {
-    pub name: Identified<Ident<'s>>,
-    pub type_spec: Identified<TypeSpec<'s>>,
+    pub name: Metadata<Ident<'s>>,
+    pub type_spec: Metadata<TypeSpec<'s>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Function<'s, 'a> {
-    pub name: Identified<Ident<'s>>,
+    pub name: Metadata<Ident<'s>>,
 
     pub parameters: &'a [Parameter<'s>],
-    pub ret: Option<Identified<TypeSpec<'s>>>,
+    pub ret: Option<Metadata<TypeSpec<'s>>>,
 
-    pub block: &'a Identified<Block<'s, 'a>>,
+    pub block: &'a Metadata<Block<'s, 'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -106,15 +102,15 @@ pub enum Lit<'s> {
 pub enum Statement<'s, 'a> {
     Expr(&'a Expr<'s, 'a>),
     Let(
-        Identified<Ident<'s>>,
-        Option<Identified<TypeSpec<'s>>>,
+        Metadata<Ident<'s>>,
+        Option<Metadata<TypeSpec<'s>>>,
         &'a Expr<'s, 'a>,
     ),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Item<'s, 'a> {
-    Function(Identified<Function<'s, 'a>>),
+    Function(Metadata<Function<'s, 'a>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]

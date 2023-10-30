@@ -1,24 +1,24 @@
-macro_rules! identified {
+macro_rules! metadata {
     ($x:pat) => {
-        $crate::syntax_id::Identified { value: $x, .. }
+        $crate::ast_metadata::Metadata { value: $x, .. }
     };
 }
 
 macro_rules! int {
     ($i:literal) => {
-        identified!(ExprKind::Lit(Lit::Int(stringify!($i))))
+        metadata!(ExprKind::Lit(Lit::Int(stringify!($i))))
     };
 }
 
 macro_rules! string {
     ($i:literal) => {
-        identified!(ExprKind::Lit(Lit::String($i)))
+        metadata!(ExprKind::Lit(Lit::String($i)))
     };
 }
 
 macro_rules! ident_expr {
     ($i:ident) => {
-        identified!(ExprKind::Ident(identified!(Ident {
+        metadata!(ExprKind::Ident(metadata!(Ident {
             string: stringify!($i),
         })))
     };
@@ -26,7 +26,7 @@ macro_rules! ident_expr {
 
 macro_rules! ident {
     ($i:ident) => {
-        identified!(Ident {
+        metadata!(Ident {
             string: stringify!($i),
         })
     };
@@ -34,114 +34,110 @@ macro_rules! ident {
 
 macro_rules! bool {
     ($i:literal) => {
-        identified!(ExprKind::Lit(Lit::Bool($i)))
+        metadata!(ExprKind::Lit(Lit::Bool($i)))
     };
 }
 
 macro_rules! neg {
     ($x:pat) => {
-        identified!(ExprKind::UnaryOp(identified!(UnaryOp::Neg), $x))
+        metadata!(ExprKind::UnaryOp(metadata!(UnaryOp::Neg), $x))
     };
 }
 
 macro_rules! not {
     ($x:pat) => {
-        identified!(ExprKind::UnaryOp(identified!(UnaryOp::Not), $x))
+        metadata!(ExprKind::UnaryOp(metadata!(UnaryOp::Not), $x))
     };
 }
 
 macro_rules! and {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(
-            identified!(BinaryOp::LogicalAnd),
-            $x,
-            $y
-        ))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::LogicalAnd), $x, $y))
     };
 }
 
 macro_rules! or {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::LogicalOr), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::LogicalOr), $x, $y))
     };
 }
 
 macro_rules! add {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Add), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Add), $x, $y))
     };
 }
 
 macro_rules! sub {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Sub), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Sub), $x, $y))
     };
 }
 
 macro_rules! mul {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Mul), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Mul), $x, $y))
     };
 }
 
 macro_rules! div {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Div), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Div), $x, $y))
     };
 }
 
 macro_rules! gt {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Gt), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Gt), $x, $y))
     };
 }
 
 macro_rules! gte {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Gte), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Gte), $x, $y))
     };
 }
 
 macro_rules! lt {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Lt), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Lt), $x, $y))
     };
 }
 
 macro_rules! lte {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Lte), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Lte), $x, $y))
     };
 }
 
 macro_rules! eq {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Eq), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Eq), $x, $y))
     };
 }
 
 macro_rules! neq {
     ($x:pat, $y:pat) => {
-        identified!(ExprKind::BinaryOp(identified!(BinaryOp::Neq), $x, $y))
+        metadata!(ExprKind::BinaryOp(metadata!(BinaryOp::Neq), $x, $y))
     };
 }
 
 macro_rules! paren {
     ($x:pat) => {
-        identified!(ExprKind::Paren($x))
+        metadata!(ExprKind::Paren($x))
     };
 }
 
 macro_rules! tuple {
     ($($x:pat),*) => {
-        identified!(ExprKind::Tuple(&[$($x),*]))
+        metadata!(ExprKind::Tuple(&[$($x),*]))
     };
 }
 
 macro_rules! stmt {
     (let: $x:ident, $ty: pat, $exp:pat) => {
         Statement::Let(
-            identified!(Ident {
+            metadata!(Ident {
                 string: stringify!($x),
             }),
             Some($ty),
@@ -150,7 +146,7 @@ macro_rules! stmt {
     };
     (let: $x:ident, $exp:pat) => {
         Statement::Let(
-            identified!(Ident {
+            metadata!(Ident {
                 string: stringify!($x),
             }),
             None,
@@ -164,16 +160,16 @@ macro_rules! stmt {
 
 macro_rules! call {
     ($callee: pat => [$($arg: pat),*]) => {
-        identified!(ExprKind::Call($callee, identified!(&[$($arg),*])))
+        metadata!(ExprKind::Call($callee, metadata!(&[$($arg),*])))
     };
 }
 
 macro_rules! block {
     ($($stmts:pat),*) => {
-        identified!(Block { stmts: &[$($stmts),*], last: None, .. })
+        metadata!(Block { stmts: &[$($stmts),*], last: None, .. })
     };
     ($($stmts:pat),* => $exp:pat) => {
-        identified!(Block { stmts: &[$($stmts),*], last: Some($exp), .. })
+        metadata!(Block { stmts: &[$($stmts),*], last: Some($exp), .. })
     };
 }
 
@@ -187,13 +183,13 @@ macro_rules! file {
 
 macro_rules! item {
     (func: $pat: pat) => {
-        Item::Function(identified!($pat))
+        Item::Function(metadata!($pat))
     };
 }
 
 macro_rules! type_spec {
     (name: $name: ident) => {
-        identified!(TypeSpec::Name(ident!($name)))
+        metadata!(TypeSpec::Name(ident!($name)))
     };
 }
 
@@ -225,15 +221,15 @@ macro_rules! function {
 
 macro_rules! block_expr {
     ($($tok:tt)*) =>  {
-        identified!(ExprKind::Block(block!{$($tok)*}))
+        metadata!(ExprKind::Block(block!{$($tok)*}))
     }
 }
 
 macro_rules! if_ {
     ($cond:pat, $then:pat) => {
-        identified!(ExprKind::If($cond, $then, None))
+        metadata!(ExprKind::If($cond, $then, None))
     };
     ($cond:pat, $then:pat, $else:pat) => {
-        identified!(ExprKind::If($cond, $then, Some($else)))
+        metadata!(ExprKind::If($cond, $then, Some($else)))
     };
 }

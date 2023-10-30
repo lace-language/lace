@@ -1,5 +1,5 @@
+use crate::ast_metadata::MetadataId;
 use crate::parser::ast::{BinaryOp, UnaryOp};
-use crate::syntax_id::NodeId;
 use crate::typechecking::constraint_generation::BlockReturn;
 
 pub enum ConstraintMetadata<'a> {
@@ -8,41 +8,41 @@ pub enum ConstraintMetadata<'a> {
     NoConstraintMetadata,
 
     /// Generated for binary operators
-    BinaryOp(NodeId, NodeId, BinaryOp),
+    BinaryOp(MetadataId, MetadataId, BinaryOp),
     /// Generated for unary operators
-    UnaryOp(NodeId, UnaryOp),
+    UnaryOp(MetadataId, UnaryOp),
 
     /// Generated for the condition of ifs and whiles
-    BlockCondition(NodeId),
+    BlockCondition(MetadataId),
 
     /// Generated for if/else blocks which return (the types should match, and we want to report this)
-    IfReturn(NodeId, NodeId),
+    IfReturn(MetadataId, MetadataId),
 
     /// generated for function calls
     Call {
-        call_expr: NodeId,
+        call_expr: MetadataId,
     },
 
     /// generated for types which have explicitly gotten a type specified
     TypeSpec {
-        spec: NodeId,
-        name: NodeId,
+        spec: MetadataId,
+        name: MetadataId,
     },
 
     /// generated when an expression is assigned to a name. `name` contains the ID of the name.
     Assignment {
-        name: NodeId,
-        value: NodeId,
+        name: MetadataId,
+        value: MetadataId,
     },
 
     /// Generated when a function is defined
     FunctionDefinition {
-        value: NodeId,
+        value: MetadataId,
     },
 
     /// Generated for return types of functions
     FunctionReturn {
-        function: NodeId,
+        function: MetadataId,
         ret: BlockReturn,
     },
 

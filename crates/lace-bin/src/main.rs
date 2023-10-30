@@ -2,13 +2,13 @@
 
 #[macro_use]
 mod lice;
+mod ast_metadata;
 mod debug_file;
 mod error;
 mod lexer;
 mod name_resolution;
 mod parser;
 mod source_file;
-mod syntax_id;
 mod typechecking;
 
 use crate::error::{CompilerError, ResultExt, TypeErrors};

@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 
+use crate::ast_metadata::{Metadata, MetadataId};
 use crate::debug_file::create_debug_file;
 use crate::parser::ast::{Block, Expr, ExprKind, File, Ident, Item, Statement};
-use crate::syntax_id::{Identified, NodeId};
 use stack_graphs::{
     arena::Handle,
     graph::{Node, NodeID as GraphId, StackGraph, Symbol},
@@ -17,7 +17,7 @@ use stack_graphs::{
 mod tests;
 
 pub struct ResolvedNames {
-    pub(crate) names: Vec<(NodeId, NodeId)>,
+    pub(crate) names: Vec<(MetadataId, MetadataId)>,
 }
 
 pub struct Graph {
@@ -26,7 +26,7 @@ pub struct Graph {
     /// The handle to the file (used for creating new node ids)
     file: Handle<stack_graphs::graph::File>,
     /// Maps from stack graph id to AST id
-    id_map: BTreeMap<GraphId, NodeId>,
+    id_map: BTreeMap<GraphId, MetadataId>,
 }
 
 impl<'s, 'a> Graph {
@@ -58,11 +58,11 @@ impl<'s, 'a> Graph {
     /// Add a new definition to the stack-graph
     ///
     /// This only creates a node. It is does not connect it to the graph.
-    fn new_definition(&mut self, ident: &Identified<Ident<'s>>) -> Handle<Node> {
+    fn new_definition(&mut self, ident: &Metadata<Ident<'s>>) -> Handle<Node> {
         let symbol = self.add_symbol(ident.value.string);
         let node_id = self.new_node_id();
 
-        self.id_map.insert(node_id, ident.node_id);
+        self.id_map.insert(node_id, ident.metadata);
 
         // Unwrap is fine because we just made the node id
         self.graph
@@ -73,10 +73,10 @@ impl<'s, 'a> Graph {
     /// Add a new reference to the stack-graph
     ///
     /// This only creates a node. It is does not connect it to the graph.
-    fn new_reference(&mut self, ident: &Identified<Ident<'s>>) -> Handle<Node> {
+    fn new_reference(&mut self, ident: &Metadata<Ident<'s>>) -> Handle<Node> {
         let symbol = self.add_symbol(ident.value.string);
         let node_id = self.new_node_id();
-        self.id_map.insert(node_id, ident.node_id);
+        self.id_map.insert(node_id, ident.metadata);
 
         // Unwrap is fine because we just made the node id
         self.graph
@@ -174,7 +174,7 @@ impl<'s, 'a> Graph {
         self.block(internal_scope, f.value.block);
     }
 
-    fn block(&mut self, scope: Handle<Node>, block: &Identified<Block<'s, 'a>>) {
+    fn block(&mut self, scope: Handle<Node>, block: &Metadata<Block<'s, 'a>>) {
         let block_scope = self.new_scope(false);
         self.edge(block_scope, scope, 0);
 

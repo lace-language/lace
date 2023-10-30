@@ -1,8 +1,8 @@
+use crate::ast_metadata::{Metadata, MetadataId};
 use crate::parser::ast::{
     BinaryOp, Block, Expr, ExprKind, File, Function, Item, Lit, Parameter, Statement, TypeSpec,
     UnaryOp,
 };
-use crate::syntax_id::{Identified, NodeId};
 use crate::typechecking::constraint::TypeConstraintGenerator;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::TypeContext;
@@ -21,7 +21,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                 ctx.add_equal_constraint_concrete(
                     condition_type,
                     ConcreteType::Bool,
-                    ConstraintMetadata::BlockCondition(self.node_id),
+                    ConstraintMetadata::BlockCondition(self.metadata),
                 );
 
                 let if_true_type = if_true.generate_constraints(ctx).0;
@@ -31,7 +31,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     ctx.add_equal_constraint(
                         if_true_type,
                         if_false_type,
-                        ConstraintMetadata::IfReturn(if_true.node_id, if_false.node_id),
+                        ConstraintMetadata::IfReturn(if_true.metadata, if_false.metadata),
                     );
                 } else {
                     // TODO: what's the context here?
@@ -57,12 +57,12 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     ctx.add_equal_constraint_concrete(
                         l_type,
                         ConcreteType::Int,
-                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
                     ctx.add_equal_constraint_concrete(
                         r_type,
                         ConcreteType::Int,
-                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
 
                     ctx.concrete_type(ConcreteType::Int)
@@ -74,12 +74,12 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     ctx.add_equal_constraint_concrete(
                         l_type,
                         ConcreteType::Bool,
-                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
                     ctx.add_equal_constraint_concrete(
                         r_type,
                         ConcreteType::Bool,
-                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
 
                     ctx.concrete_type(ConcreteType::Bool)
@@ -96,7 +96,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     ctx.add_equal_constraint(
                         l_type,
                         r_type,
-                        ConstraintMetadata::BinaryOp(l.node_id, r.node_id, op.value),
+                        ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
 
                     ctx.concrete_type(ConcreteType::Bool)
@@ -105,7 +105,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
             ExprKind::UnaryOp(op, expr) => {
                 let expr_type = expr.generate_constraints(ctx);
 
-                let meta = ConstraintMetadata::UnaryOp(expr.node_id, op.value);
+                let meta = ConstraintMetadata::UnaryOp(expr.metadata, op.value);
                 match op.value {
                     UnaryOp::Not => {
                         ctx.add_equal_constraint_concrete(expr_type, ConcreteType::Bool, meta);
@@ -144,7 +144,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     defined_f_ty,
                     expected_f_ty,
                     ConstraintMetadata::Call {
-                        call_expr: self.node_id,
+                        call_expr: self.metadata,
                     },
                 );
 
@@ -160,10 +160,10 @@ pub enum BlockReturn {
     /// last item has semi, unit return
     None,
     /// return expression
-    Implicit(NodeId),
+    Implicit(MetadataId),
 }
 
-impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Block<'_, '_>> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Metadata<Block<'_, '_>> {
     type TypeResult = (TypeVariable, BlockReturn);
 
     fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
@@ -174,7 +174,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Block<'_, '_>> {
         if let Some(ref last) = self.value.last {
             (
                 last.generate_constraints(ctx),
-                BlockReturn::Implicit(last.node_id),
+                BlockReturn::Implicit(last.metadata),
             )
         } else {
             (ctx.concrete_type(ConcreteType::Unit), BlockReturn::None)
@@ -211,8 +211,8 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Statement<'_, '_> {
                     name_ty,
                     value_type,
                     ConstraintMetadata::Assignment {
-                        name: name.node_id,
-                        value: value.node_id,
+                        name: name.metadata,
+                        value: value.metadata,
                     },
                 );
 
@@ -222,8 +222,8 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Statement<'_, '_> {
                         value_type,
                         spec_ty,
                         ConstraintMetadata::TypeSpec {
-                            spec: spec.node_id,
-                            name: name.node_id,
+                            spec: spec.metadata,
+                            name: name.metadata,
                         },
                     );
                 }
@@ -269,7 +269,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Item<'_, '_> {
     }
 }
 
-impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Function<'_, '_>> {
+impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Metadata<Function<'_, '_>> {
     type TypeResult = ();
 
     fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
@@ -292,8 +292,8 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Function<'_, '_>> 
                 param_ty,
                 spec_ty,
                 ConstraintMetadata::TypeSpec {
-                    spec: type_spec.node_id,
-                    name: name.node_id,
+                    spec: type_spec.metadata,
+                    name: name.metadata,
                 },
             );
 
@@ -320,7 +320,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Function<'_, '_>> 
             name,
             function_type,
             ConstraintMetadata::FunctionDefinition {
-                value: self.node_id,
+                value: self.metadata,
             },
         );
 
@@ -330,7 +330,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Identified<Function<'_, '_>> 
             block_ret_ty,
             ret_ty_spec,
             ConstraintMetadata::FunctionReturn {
-                function: self.node_id,
+                function: self.metadata,
                 ret,
             },
         );
