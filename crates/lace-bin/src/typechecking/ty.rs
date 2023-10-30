@@ -55,15 +55,15 @@ impl Display for Type<'_> {
 }
 
 /// Used during type checking, contains unresolved types (type variables)
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
 pub enum ConcreteType<'a> {
     Int,
     Bool,
     Function {
-        params: &'a [TypeVariable],
-        ret: &'a TypeVariable,
+        params: &'a [TypeOrVariable<'a>],
+        ret: &'a TypeOrVariable<'a>,
     },
-    Tuple(&'a [TypeVariable]),
+    Tuple(&'a [TypeOrVariable<'a>]),
     String,
 }
 
@@ -87,22 +87,7 @@ impl<'a> ConcreteType<'a> {
 }
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct TypeVariable(usize);
-
-// TODO: remove
-impl TypeVariable {
-    /// This operation is explicit instead of a public first field so that
-    /// it is harder to accidentally do and easier to control-f for.
-    pub fn from_usize(v: usize) -> Self {
-        Self(v)
-    }
-
-    /// This operation is explicit instead of a public first field so that
-    /// it is harder to accidentally do and easier to control-f for.
-    pub fn as_usize(&self) -> usize {
-        self.0
-    }
-}
+pub struct TypeVariable(pub usize);
 
 /// generates new type variables in increasing order.
 pub struct TypeVariableGenerator {
@@ -114,10 +99,6 @@ impl TypeVariableGenerator {
         Self { curr: 0 }
     }
 
-    pub fn num_generated(&self) -> usize {
-        self.curr - 1
-    }
-
     pub fn fresh(&mut self) -> TypeVariable {
         let old = self.curr;
         self.curr += 1;
@@ -125,7 +106,7 @@ impl TypeVariableGenerator {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
 #[must_use]
 pub enum TypeOrVariable<'a> {
     Concrete(ConcreteType<'a>),
