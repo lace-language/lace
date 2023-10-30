@@ -4,12 +4,13 @@ use std::io::Write;
 use crate::ast_metadata::{Metadata, MetadataId};
 use crate::debug_file::create_debug_file;
 use crate::parser::ast::{Block, Expr, ExprKind, File, Ident, Item, Statement};
+use stack_graphs::stitching::GraphEdgeCandidates;
 use stack_graphs::{
     arena::Handle,
     graph::{Node, NodeID as GraphId, StackGraph, Symbol},
     partial::{PartialPath, PartialPaths},
     serde::NoFilter,
-    stitching::{Database, ForwardPartialPathStitcher, GraphEdges},
+    stitching::{Database, ForwardPartialPathStitcher},
     NoCancellation,
 };
 
@@ -118,9 +119,7 @@ impl<'s, 'a> Graph {
         let mut results = Vec::<PartialPath>::new();
         let mut paths = PartialPaths::new();
         ForwardPartialPathStitcher::find_all_complete_partial_paths(
-            &self.graph,
-            &mut paths,
-            &mut GraphEdges(None),
+            &mut GraphEdgeCandidates::new(&self.graph, &mut paths, None),
             references,
             &NoCancellation,
             |_graph, _paths, path| {
