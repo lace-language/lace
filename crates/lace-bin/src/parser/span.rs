@@ -1,7 +1,4 @@
-use std::ops::{Deref, DerefMut};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NodeId(usize);
+use crate::ast_metadata::{Metadata, MetadataId};
 
 pub struct Spans(Vec<Span>);
 
@@ -10,20 +7,22 @@ impl Spans {
         Self(Vec::new())
     }
 
-    pub fn store(&mut self, span: Span) -> NodeId {
+    pub fn store(&mut self, span: Span) -> MetadataId {
         self.0.push(span);
-        NodeId(self.0.len() - 1)
+        MetadataId(self.0.len() - 1)
     }
 
     pub fn merge<A, B>(
         &mut self,
-        &Spanned {
-            span: NodeId(a), ..
-        }: &Spanned<A>,
-        &Spanned {
-            span: NodeId(b), ..
-        }: &Spanned<B>,
-    ) -> NodeId {
+        &Metadata {
+            metadata: MetadataId(a),
+            ..
+        }: &Metadata<A>,
+        &Metadata {
+            metadata: MetadataId(b),
+            ..
+        }: &Metadata<B>,
+    ) -> MetadataId {
         let a = self.0[a];
         let b = self.0[b];
         self.store(a.merge(&b))
@@ -32,54 +31,17 @@ impl Spans {
     pub fn store_merged<T>(
         &mut self,
         span: Span,
-        &Spanned {
-            span: NodeId(a), ..
-        }: &Spanned<T>,
-    ) -> NodeId {
+        &Metadata {
+            metadata: MetadataId(a),
+            ..
+        }: &Metadata<T>,
+    ) -> MetadataId {
         let a = self.0[a];
         self.store(span.merge(&a))
     }
 
-    pub fn get(&self, NodeId(id): NodeId) -> Span {
+    pub fn get(&self, MetadataId(id): MetadataId) -> Span {
         self.0[id]
-    }
-}
-
-pub trait WithSpan {
-    fn with_span(self, span: NodeId) -> Spanned<Self>
-    where
-        Self: Sized;
-}
-
-impl<T> WithSpan for T {
-    fn with_span(self, span: NodeId) -> Spanned<Self> {
-        Spanned { span, value: self }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Spanned<T> {
-    pub span: NodeId,
-    pub value: T,
-}
-
-impl<T> Deref for Spanned<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<T> DerefMut for Spanned<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
-}
-
-impl<T> Spanned<T> {
-    pub fn span(&self) -> NodeId {
-        self.span
     }
 }
 

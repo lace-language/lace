@@ -1,24 +1,24 @@
-use crate::parser::span::Spanned;
+use crate::ast_metadata::Metadata;
 use derive_more::Display;
 
-pub type Expr<'s, 'a> = Spanned<ExprKind<'s, 'a>>;
+pub type Expr<'s, 'a> = Metadata<ExprKind<'s, 'a>>;
 
 /// Expressions
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprKind<'s, 'a> {
     Lit(Lit<'s>),
     If(
-        &'a Spanned<Self>,
-        &'a Spanned<Block<'s, 'a>>,
-        Option<&'a Spanned<Block<'s, 'a>>>,
+        &'a Metadata<Self>,
+        &'a Metadata<Block<'s, 'a>>,
+        Option<&'a Metadata<Block<'s, 'a>>>,
     ),
-    Block(&'a Spanned<Block<'s, 'a>>),
-    Ident(Spanned<Ident<'s>>),
-    Paren(&'a Spanned<Self>),
-    BinaryOp(Spanned<BinaryOp>, &'a Spanned<Self>, &'a Spanned<Self>),
-    UnaryOp(Spanned<UnaryOp>, &'a Spanned<Self>),
-    Tuple(&'a [Spanned<Self>]),
-    Call(&'a Spanned<Self>, Spanned<&'a [Spanned<Self>]>),
+    Block(&'a Metadata<Block<'s, 'a>>),
+    Ident(Metadata<Ident<'s>>),
+    Paren(&'a Metadata<Self>),
+    BinaryOp(Metadata<BinaryOp>, &'a Metadata<Self>, &'a Metadata<Self>),
+    UnaryOp(Metadata<UnaryOp>, &'a Metadata<Self>),
+    Tuple(&'a [Metadata<Self>]),
+    Call(&'a Metadata<Self>, Metadata<&'a [Metadata<Self>]>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
@@ -49,9 +49,11 @@ pub enum BinaryOp {
     Neq,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Display)]
 pub enum UnaryOp {
+    #[display(fmt = "!")]
     Not,
+    #[display(fmt = "-")]
     Neg,
 }
 
@@ -62,23 +64,23 @@ pub struct Ident<'s> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TypeSpec<'s> {
-    Name(Spanned<Ident<'s>>),
+    Name(Metadata<Ident<'s>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Parameter<'s> {
-    pub name: Spanned<Ident<'s>>,
-    pub type_spec: Spanned<TypeSpec<'s>>,
+    pub name: Metadata<Ident<'s>>,
+    pub type_spec: Metadata<TypeSpec<'s>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Function<'s, 'a> {
-    pub name: Spanned<Ident<'s>>,
+    pub name: Metadata<Ident<'s>>,
 
     pub parameters: &'a [Parameter<'s>],
-    pub ret: Option<Spanned<TypeSpec<'s>>>,
+    pub ret: Option<Metadata<TypeSpec<'s>>>,
 
-    pub block: &'a Spanned<Block<'s, 'a>>,
+    pub block: &'a Metadata<Block<'s, 'a>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -100,15 +102,15 @@ pub enum Lit<'s> {
 pub enum Statement<'s, 'a> {
     Expr(&'a Expr<'s, 'a>),
     Let(
-        Spanned<Ident<'s>>,
-        Option<Spanned<TypeSpec<'s>>>,
+        Metadata<Ident<'s>>,
+        Option<Metadata<TypeSpec<'s>>>,
         &'a Expr<'s, 'a>,
     ),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Item<'s, 'a> {
-    Function(Spanned<Function<'s, 'a>>),
+    Function(Metadata<Function<'s, 'a>>),
 }
 
 #[derive(Debug, PartialEq, Eq)]

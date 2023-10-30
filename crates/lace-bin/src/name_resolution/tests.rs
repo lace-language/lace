@@ -1,10 +1,9 @@
 use crate::error::ResultExt;
 use crate::lexer::token_buffer::TokenBuffer;
-use crate::nameres;
+use crate::name_resolution;
 use crate::parser::Parser;
 use crate::source_file::SourceFile;
 use bumpalo::Bump;
-use miette::LabeledSpan;
 
 macro_rules! parse {
     (let $pat: pat = $source: literal) => {
@@ -26,30 +25,30 @@ macro_rules! parse {
 fn test_no_nameres() {
     parse!(let (_spans, ast, source) = "fn main(){}");
 
-    let mut graph = nameres::Graph::new(source.filename);
+    let mut graph = name_resolution::Graph::new(source.filename);
     let resolved = graph.resolve(&ast);
-    assert!(resolved.is_empty())
+    assert!(resolved.names.is_empty())
 }
 
 #[test]
 fn test_recursive() {
-    parse!(let (spans, ast, source) = "fn main(){main();}");
+    parse!(let (_spans, ast, source) = "fn main(){main();}");
 
-    let mut graph = nameres::Graph::new(source.filename);
+    let mut graph = name_resolution::Graph::new(source.filename);
     let resolved = graph.resolve(&ast);
 
-    assert_eq!(resolved.len(), 1);
+    assert_eq!(resolved.names.len(), 1);
 
-    eprintln!("resolved {}", resolved.len());
-    for (from, to) in resolved {
-        let report = miette::miette!(
-            labels = vec![
-                LabeledSpan::at(spans.get(from), "reference"),
-                LabeledSpan::at(spans.get(to), "definition"),
-            ],
-            "resolved"
-        )
-        .with_source_code(source.named_source());
-        eprintln!("{:?}", report);
-    }
+    // eprintln!("resolved {}", resolved.names.len());
+    // for (from, to) in resolved {
+    //     let report = miette::miette!(
+    //         labels = vec![
+    //             LabeledSpan::at(spans.get(from), "reference"),
+    //             LabeledSpan::at(spans.get(to), "definition"),
+    //         ],
+    //         "resolved"
+    //     )
+    //     .with_source_code(source.named_source());
+    //     eprintln!("{:?}", report);
+    // }
 }
