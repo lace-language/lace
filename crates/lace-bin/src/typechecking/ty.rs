@@ -21,32 +21,28 @@ impl Display for Type<'_> {
             Type::Bool => write!(f, "bool"),
             Type::Function { params, ret } => {
                 write!(f, "fn (")?;
-                if let Some((last, rest)) = params.split_last() {
-                    for i in rest {
-                        write!(f, "{i},")?;
-                    }
-
-                    write!(f, "{last}")?;
-                    if rest.is_empty() {
-                        write!(f, ",")?;
-                    }
+                let mut params = params.iter();
+                if let Some(p) = params.next() {
+                    write!(f, "{p}")?;
                 }
-
+                for p in params {
+                    write!(f, ", {p}")?;
+                }
                 write!(f, ") -> {ret}")
             }
-            Type::Tuple(t) => {
+            // If there is only a single parameter, there should be a trailing comma
+            Type::Tuple(&[p]) => {
+                write!(f, "({p},)")
+            }
+            Type::Tuple(params) => {
                 write!(f, "(")?;
-                if let Some((last, rest)) = t.split_last() {
-                    for i in rest {
-                        write!(f, "{},", i)?;
-                    }
-
-                    write!(f, "{}", last)?;
-                    if rest.is_empty() {
-                        write!(f, ",")?;
-                    }
+                let mut params = params.iter();
+                if let Some(p) = params.next() {
+                    write!(f, "{p}")?;
                 }
-
+                for p in params {
+                    write!(f, ", {p}")?;
+                }
                 write!(f, ")")
             }
             Type::String => write!(f, "string"),
@@ -75,6 +71,8 @@ impl<'a> Display for PartialType<'a> {
             PartialType::Function { params, .. } => {
                 write!(f, "fn ({}) -> _", params.iter().map(|_| "_").join(","))
             }
+            // If there is only a single parameter, there should be a trailing comma
+            PartialType::Tuple(&[_]) => write!(f, "(_,)"),
             PartialType::Tuple(t) => write!(f, "({})", t.iter().map(|_| "_").join(",")),
             PartialType::String => write!(f, "string"),
         }
@@ -122,5 +120,48 @@ impl<'a> From<PartialType<'a>> for TypeOrVariable<'a> {
 impl<'a> From<TypeVariable> for TypeOrVariable<'a> {
     fn from(value: TypeVariable) -> Self {
         Self::Variable(value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Type;
+
+    #[test]
+    fn display_function() {
+        assert_eq!(
+            Type::Function {
+                params: &[],
+                ret: &Type::Int,
+            }
+            .to_string(),
+            "fn () -> int"
+        );
+        assert_eq!(
+            Type::Function {
+                params: &[Type::Int],
+                ret: &Type::Int,
+            }
+            .to_string(),
+            "fn (int) -> int"
+        );
+        assert_eq!(
+            Type::Function {
+                params: &[Type::Int, Type::Int],
+                ret: &Type::Int,
+            }
+            .to_string(),
+            "fn (int, int) -> int"
+        );
+    }
+
+    #[test]
+    fn display_tuple() {
+        assert_eq!(Type::Tuple(&[]).to_string(), "()");
+        assert_eq!(Type::Tuple(&[Type::Int]).to_string(), "(int,)");
+        assert_eq!(
+            Type::Tuple(&[Type::Int, Type::Int]).to_string(),
+            "(int, int)"
+        );
     }
 }
