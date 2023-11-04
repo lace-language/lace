@@ -2,7 +2,7 @@ use crate::ast_metadata::MetadataId;
 use crate::parser::ast::{BinaryOp, UnaryOp};
 use crate::typechecking::constraint_generation::BlockReturn;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConstraintMetadata<'a> {
     /// Always a LICE later on in the compiler, but sometimes convenient
     #[allow(clippy::enum_variant_names)]

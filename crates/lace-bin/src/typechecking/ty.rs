@@ -1,6 +1,5 @@
 use crate::error::ErrorId;
 use crate::typechecking::context::TypeContext;
-use bumpalo::Bump;
 use derive_more::From;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};

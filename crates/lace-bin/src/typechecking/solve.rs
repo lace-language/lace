@@ -5,13 +5,11 @@ use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::{NameMapping, TypeContext};
 use crate::typechecking::error::{InnerTypeError, TypeError};
-use crate::typechecking::ty::{
-    IntoTypeOrVariable, PartialType, Type, TypeOrVariable, TypeVariable,
-};
+use crate::typechecking::ty::{PartialType, Type, TypeOrVariable, TypeVariable};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use unionfind::HashUnionFind;
 
 type SolveState<'a> = HashUnionFind<TypeOrVariable<'a>>;
@@ -27,12 +25,6 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
 
         let error_id = self.error_id_generator.fresh();
         TypeOrVariable::Error(error_id)
-    }
-
-    fn get_error(&mut self, id: ErrorId) -> &mut Vec<FailedUnification<'a>> {
-        self.errors
-            .get_mut(&id)
-            .unwrap_or_lice("should have been inserted")
     }
 
     fn unify_one(
@@ -70,14 +62,15 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                     (PartialType::String, PartialType::String) => {}
                     (PartialType::Tuple(elems_a), PartialType::Tuple(elems_b)) => {
                         if elems_a.len() != elems_b.len() {
-                            return self.cant_unify(
-                                concrete_a,
-                                concrete_b,
-                                ConstraintMetadata::TupleLength,
-                            );
+                            todo!()
+                            // return self.cant_unify(
+                            //     concrete_a,
+                            //     concrete_b,
+                            //     ConstraintMetadata::TupleLength,
+                            // );
                         }
 
-                        let meta = self.alloc(metadata);
+                        let meta = self.alloc(metadata.clone());
 
                         for (x, y) in elems_a.iter().zip(*elems_b) {
                             self.add_equal_constraint(
@@ -98,14 +91,15 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                         },
                     ) => {
                         if params_a.len() != params_b.len() {
-                            return self.cant_unify(
-                                concrete_a,
-                                concrete_b,
-                                ConstraintMetadata::ParamLength,
-                            );
+                            // todo!()
+                            // return self.cant_unify(
+                            //     concrete_a,
+                            //     concrete_b,
+                            //     ConstraintMetadata::ParamLength,
+                            // );
                         }
 
-                        let meta = self.alloc(metadata);
+                        let meta = self.alloc(metadata.clone());
 
                         for (x, y) in params_a.iter().zip(*params_b) {
                             self.add_equal_constraint(
@@ -148,7 +142,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
 
     pub fn solve(mut self) -> Result<SolvedTypes<'a>, TypeError> {
         let mut uf = SolveState::new(std::iter::empty()).unwrap_or_lice("empty iterator");
-        let mut solved_constraints = Vec::new();
+        let mut solved_constraints = Vec::with_capacity(self.constraints.len());
 
         while let Some((constraint, meta)) = self.constraints.pop_front() {
             match constraint {
@@ -161,39 +155,47 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
             solved_constraints.push((constraint, meta));
         }
 
-        if !self.errors.is_empty() {
-            Err(self.collect_errors())
-            // let mut had = HashMap::new();
-            // for (k, v) in uf.into_inner() {
-            //     if let TypeOrVariable::Error(e) = i {
-            //         if !had.contains(&e) {
-            //             let err = self
-            //                 .errors
-            //                 .get(&e)
-            //                 .unwrap_or_lice("should have been inserted");
-            //             had.insert(e);
-            //
-            //             errors.extend(self.convert_error(err))
-            //         }
-            //     }
-            // }
-        } else {
-            let solved_types = SolvedTypes {
-                name_mapping: self.name_mapping,
-                uf,
-            };
+        Self::find_errors(solved_constraints, &mut uf)?;
 
-            Ok(solved_types)
-        }
+        let solved_types = SolvedTypes {
+            name_mapping: self.name_mapping,
+            uf,
+        };
+
+        Ok(solved_types)
     }
 
-    fn convert_error(&self, e: &[FailedUnification]) -> Vec<InnerTypeError> {
+    fn convert_error_group(e: Vec<(Constraint, ConstraintMetadata)>) -> InnerTypeError {
         println!("{e:?}");
 
-        vec![]
-    }
-    fn collect_errors(&self) -> TypeError {
         todo!()
+    }
+    fn find_errors(
+        solved_constraints: Vec<(Constraint<'a>, ConstraintMetadata<'a>)>,
+        uf: &mut SolveState<'a>,
+    ) -> Result<(), TypeError> {
+        let mut error_groups = HashMap::new();
+
+        for (c @ Constraint::Equal(l, _), meta) in solved_constraints {
+            if let TypeOrVariable::Error(e) = uf.find_shorten(&l).unwrap_or_lice("should be in uf")
+            {
+                error_groups
+                    .entry(e)
+                    .or_insert_with(Vec::new)
+                    .push((c, meta));
+            }
+        }
+
+        if !error_groups.is_empty() {
+            Err(TypeError {
+                errors: error_groups
+                    .into_values()
+                    .map(Self::convert_error_group)
+                    .collect_vec(),
+            })
+        } else {
+            Ok(())
+        }
     }
 }
 

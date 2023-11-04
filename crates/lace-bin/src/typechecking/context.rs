@@ -38,9 +38,6 @@ pub struct TypeContext<'a, 'sp> {
     /// Stores a mapping from identifiers to type variables
     pub name_mapping: NameMapping,
 
-    pub errors: HashMap<ErrorId, Vec<FailedUnification<'a>>>,
-    pub error_merges: Vec<(ErrorId, ErrorId)>,
-
     pub spans: &'sp Spans,
 }
 
@@ -52,8 +49,6 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
             arena,
             constraints: VecDeque::new(),
             name_mapping: Default::default(),
-            errors: HashMap::new(),
-            error_merges: vec![],
             spans,
         }
     }

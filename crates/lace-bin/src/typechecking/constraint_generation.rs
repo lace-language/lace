@@ -156,7 +156,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
 
 /// The types of ways in which a block could have returns in it
 /// TODO: explicit return
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BlockReturn {
     /// last item has semi, unit return
     None,
