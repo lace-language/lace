@@ -6,7 +6,7 @@ use crate::parser::ast::{
 use crate::typechecking::constraint::TypeConstraintGenerator;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::TypeContext;
-use crate::typechecking::ty::{PartialType, TypeOrVariable};
+use crate::typechecking::ty::{IntoTypeOrVariable, PartialType, TypeOrVariable};
 use bumpalo::collections::Vec;
 
 impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
@@ -45,7 +45,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                 if_true_type
             }
             ExprKind::Block(b) => b.generate_constraints(ctx).0,
-            ExprKind::Ident(i) => ctx.type_of_name(i).into(),
+            ExprKind::Ident(i) => ctx.type_of_name(i).into_type_or_variable(ctx),
             ExprKind::Paren(expr) => expr.generate_constraints(ctx),
             // TODO: with operator overloading this obviously needs to become much more complicated.
             //       Also, we assume here that even for primitive types, + is only defined between integers, not strings.
@@ -65,7 +65,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                         ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
 
-                    PartialType::Int.into()
+                    PartialType::Int.into_type_or_variable(ctx)
                 }
                 BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
                     let l_type = l.generate_constraints(ctx);
@@ -82,7 +82,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                         ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
 
-                    PartialType::Bool.into()
+                    PartialType::Bool.into_type_or_variable(ctx)
                 }
                 BinaryOp::Gt
                 | BinaryOp::Gte
@@ -99,7 +99,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                         ConstraintMetadata::BinaryOp(l.metadata, r.metadata, op.value),
                     );
 
-                    PartialType::Bool.into()
+                    PartialType::Bool.into_type_or_variable(ctx)
                 }
             },
             ExprKind::UnaryOp(op, expr) => {
@@ -109,11 +109,11 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                 match op.value {
                     UnaryOp::Not => {
                         ctx.add_equal_constraint(expr_type, PartialType::Bool, meta);
-                        PartialType::Bool.into()
+                        PartialType::Bool.into_type_or_variable(ctx)
                     }
                     UnaryOp::Neg => {
                         ctx.add_equal_constraint(expr_type, PartialType::Int, meta);
-                        PartialType::Int.into()
+                        PartialType::Int.into_type_or_variable(ctx)
                     }
                 }
             }
@@ -124,7 +124,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     res.push(ty);
                 }
 
-                PartialType::Tuple(res.into_bump_slice()).into()
+                PartialType::Tuple(res.into_bump_slice()).into_type_or_variable(ctx)
             }
             ExprKind::Call(f, args) => {
                 let mut param_types = Vec::new_in(ctx.arena);
@@ -136,7 +136,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
 
                 let expected_f_ty = PartialType::Function {
                     params: param_types.into_bump_slice(),
-                    ret: ctx.alloc(ret_ty.into()),
+                    ret: ret_ty.into_type_or_variable(ctx),
                 };
                 let defined_f_ty = f.generate_constraints(ctx);
 
@@ -148,7 +148,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
                     },
                 );
 
-                ret_ty.into()
+                ret_ty.into_type_or_variable(ctx)
             }
         }
     }
@@ -156,6 +156,7 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Expr<'_, '_> {
 
 /// The types of ways in which a block could have returns in it
 /// TODO: explicit return
+#[derive(Debug)]
 pub enum BlockReturn {
     /// last item has semi, unit return
     None,
@@ -177,7 +178,10 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Metadata<Block<'_, '_>> {
                 BlockReturn::Implicit(last.metadata),
             )
         } else {
-            (PartialType::Unit.into(), BlockReturn::None)
+            (
+                PartialType::Unit.into_type_or_variable(ctx),
+                BlockReturn::None,
+            )
         }
     }
 }
@@ -185,11 +189,11 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Metadata<Block<'_, '_>> {
 impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Lit<'_> {
     type TypeResult = TypeOrVariable<'a>;
 
-    fn generate_constraints(&self, _ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         match self {
-            Lit::Bool(_) => PartialType::Bool.into(),
-            Lit::Int(_) => PartialType::Int.into(),
-            Lit::String(_) => PartialType::String.into(),
+            Lit::Bool(_) => PartialType::Bool.into_type_or_variable(ctx),
+            Lit::Int(_) => PartialType::Int.into_type_or_variable(ctx),
+            Lit::String(_) => PartialType::String.into_type_or_variable(ctx),
         }
     }
 }
@@ -235,14 +239,14 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Statement<'_, '_> {
 impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for TypeSpec<'_> {
     type TypeResult = TypeOrVariable<'a>;
 
-    fn generate_constraints(&self, _ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
+    fn generate_constraints(&self, ctx: &mut TypeContext<'a, 'sp>) -> Self::TypeResult {
         match self {
             // TODO: somewhere make the distinction between primitives and compounds, if necessary
             TypeSpec::Name(n) => match n.value.string {
                 // TODO: expand to all different int types
-                "int" => PartialType::Int.into(),
-                "string" => PartialType::String.into(),
-                "bool" => PartialType::Bool.into(),
+                "int" => PartialType::Int.into_type_or_variable(ctx),
+                "string" => PartialType::String.into_type_or_variable(ctx),
+                "bool" => PartialType::Bool.into_type_or_variable(ctx),
                 other => unimplemented!("type {other} not yet supported. Use int, string or bool"),
             },
         }
@@ -305,13 +309,13 @@ impl<'a, 'sp> TypeConstraintGenerator<'a, 'sp> for Metadata<Function<'_, '_>> {
             let ret_ty_spec = ret.value.generate_constraints(ctx);
             ret_ty_spec
         } else {
-            PartialType::Unit.into()
+            PartialType::Unit.into_type_or_variable(ctx)
         };
 
         // gives this function type
         let function_type = PartialType::Function {
             params: &[],
-            ret: ctx.alloc(ret_ty_spec),
+            ret: ret_ty_spec,
         };
 
         // the function name has this type

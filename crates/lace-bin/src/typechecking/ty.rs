@@ -1,5 +1,10 @@
+use crate::error::ErrorId;
+use crate::typechecking::context::TypeContext;
+use bumpalo::Bump;
+use derive_more::From;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
+use std::marker::PhantomData;
 
 /// Used after type checking, contains no unresolved types
 #[derive(Copy, Clone)]
@@ -61,7 +66,7 @@ pub enum PartialType<'a> {
     Bool,
     Function {
         params: &'a [TypeOrVariable<'a>],
-        ret: &'a TypeOrVariable<'a>,
+        ret: TypeOrVariable<'a>,
     },
     Tuple(&'a [TypeOrVariable<'a>]),
     String,
@@ -86,41 +91,67 @@ impl<'a> PartialType<'a> {
     pub const Unit: Self = Self::Tuple(&[]);
 }
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, From)]
 pub struct TypeVariable(pub usize);
 
 /// generates new type variables in increasing order.
-pub struct TypeVariableGenerator {
+pub struct VariableGenerator<T> {
     curr: usize,
+    phantom: PhantomData<T>,
 }
 
-impl TypeVariableGenerator {
+impl<T: From<usize>> VariableGenerator<T> {
     pub fn new() -> Self {
-        Self { curr: 0 }
+        Self {
+            curr: 0,
+            phantom: Default::default(),
+        }
     }
 
-    pub fn fresh(&mut self) -> TypeVariable {
+    pub fn fresh(&mut self) -> T {
         let old = self.curr;
         self.curr += 1;
-        TypeVariable(old)
+        old.into()
     }
 }
 
 #[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
-#[must_use]
 pub enum TypeOrVariable<'a> {
-    Concrete(PartialType<'a>),
+    /// The type variable here is to make each concrete type unique,
+    /// so different error messages referring to *a* concrete type
+    /// don't all refer to the same concrete type
+    Concrete(&'a PartialType<'a>, TypeVariable),
     Variable(TypeVariable),
+
+    /// Generated after type errors occurred. Type errors are like poison.
+    /// When unifications occur with type errors, the type error becomes bigger.
+    Error(ErrorId),
 }
 
-impl<'a> From<PartialType<'a>> for TypeOrVariable<'a> {
-    fn from(value: PartialType<'a>) -> Self {
-        Self::Concrete(value)
+pub trait IntoTypeOrVariable<'a> {
+    fn into_type_or_variable(self, ctx: &mut TypeContext<'a, '_>) -> TypeOrVariable<'a>;
+}
+
+impl<'a> IntoTypeOrVariable<'a> for PartialType<'a> {
+    fn into_type_or_variable(self, ctx: &mut TypeContext<'a, '_>) -> TypeOrVariable<'a> {
+        TypeOrVariable::Concrete(ctx.alloc(self), ctx.fresh())
     }
 }
 
-impl<'a> From<TypeVariable> for TypeOrVariable<'a> {
-    fn from(value: TypeVariable) -> Self {
-        Self::Variable(value)
+impl<'a> IntoTypeOrVariable<'a> for &'a PartialType<'a> {
+    fn into_type_or_variable(self, ctx: &mut TypeContext<'a, '_>) -> TypeOrVariable<'a> {
+        TypeOrVariable::Concrete(self, ctx.fresh())
+    }
+}
+
+impl<'a> IntoTypeOrVariable<'a> for TypeVariable {
+    fn into_type_or_variable(self, _ctx: &mut TypeContext<'a, '_>) -> TypeOrVariable<'a> {
+        TypeOrVariable::Variable(self)
+    }
+}
+
+impl<'a> IntoTypeOrVariable<'a> for TypeOrVariable<'a> {
+    fn into_type_or_variable(self, _ctx: &mut TypeContext<'a, '_>) -> TypeOrVariable<'a> {
+        self
     }
 }

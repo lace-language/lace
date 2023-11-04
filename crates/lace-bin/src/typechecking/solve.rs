@@ -1,57 +1,85 @@
 use crate::ast_metadata::MetadataId;
+use crate::error::{ErrorId, FailedUnification};
 use crate::lice::Lice;
-use crate::name_resolution::ResolvedNames;
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
 use crate::typechecking::context::{NameMapping, TypeContext};
-use crate::typechecking::error::{ErrorContext, TypeError};
-use crate::typechecking::ty::{PartialType, Type, TypeOrVariable, TypeVariable};
+use crate::typechecking::error::{InnerTypeError, TypeError};
+use crate::typechecking::ty::{
+    IntoTypeOrVariable, PartialType, Type, TypeOrVariable, TypeVariable,
+};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
 use unionfind::HashUnionFind;
 
 type SolveState<'a> = HashUnionFind<TypeOrVariable<'a>>;
 
 impl<'a, 'sp> TypeContext<'a, 'sp> {
     #[allow(unused)]
-    fn cant_unify(&mut self, a: PartialType<'a>, b: PartialType<'a>, meta: ConstraintMetadata<'a>) {
-        println!("can't unify {a} == {b}");
-        self.unification_failures.push((a, b, meta));
+    fn cant_unify(
+        &mut self,
+        left: &'a PartialType<'a>,
+        right: &'a PartialType<'a>,
+    ) -> TypeOrVariable<'a> {
+        println!("can't unify {left} == {right}");
+
+        let error_id = self.error_id_generator.fresh();
+        TypeOrVariable::Error(error_id)
+    }
+
+    fn get_error(&mut self, id: ErrorId) -> &mut Vec<FailedUnification<'a>> {
+        self.errors
+            .get_mut(&id)
+            .unwrap_or_lice("should have been inserted")
     }
 
     fn unify_one(
         &mut self,
         a: TypeOrVariable<'a>,
         b: TypeOrVariable<'a>,
-        meta: ConstraintMetadata<'a>,
+        metadata: &ConstraintMetadata<'a>,
     ) -> TypeOrVariable<'a> {
         match (a, b) {
+            // unification of a concrete type and an error or error variable adds to the error
+            (TypeOrVariable::Error(id), TypeOrVariable::Concrete(..))
+            | (TypeOrVariable::Concrete(..), TypeOrVariable::Error(id)) => {
+                TypeOrVariable::Error(id)
+            }
+
+            // unification of two errors merges the errors
+            (TypeOrVariable::Error(ida), TypeOrVariable::Error(idb)) => TypeOrVariable::Error(ida),
+            // unification between an error (variable) and a variable propagates the variable with a marker that it's also an error now
+            (TypeOrVariable::Variable(b), TypeOrVariable::Error(id))
+            | (TypeOrVariable::Error(id), TypeOrVariable::Variable(b)) => TypeOrVariable::Error(id),
+
             // if not, we choose one by a random dice roll. My dice rolled 0 so we choose a
             (a @ TypeOrVariable::Variable(_), TypeOrVariable::Variable(_)) => a,
             // if one of them is concrete, make that the representative
-            (c @ TypeOrVariable::Concrete(_), TypeOrVariable::Variable(_))
-            | (TypeOrVariable::Variable(_), c @ TypeOrVariable::Concrete(_)) => c,
+            (c @ TypeOrVariable::Concrete(_, _), TypeOrVariable::Variable(_))
+            | (TypeOrVariable::Variable(_), c @ TypeOrVariable::Concrete(_, _)) => c,
             // however, when both are concrete, we can only union if they are the same.
             // we don't actually check that here. Instead, we assume they are the same,
             // continue with a (random dice roll) and then later check if they really were
             // the same or that we went ahead with the wrong type.
-            (TypeOrVariable::Concrete(concrete_a), TypeOrVariable::Concrete(concrete_b)) => {
+            (TypeOrVariable::Concrete(concrete_a, _), TypeOrVariable::Concrete(concrete_b, _)) => {
                 match (concrete_a, concrete_b) {
                     (PartialType::Int, PartialType::Int) => {}
                     (PartialType::Bool, PartialType::Bool) => {}
                     (PartialType::String, PartialType::String) => {}
                     (PartialType::Tuple(elems_a), PartialType::Tuple(elems_b)) => {
                         if elems_a.len() != elems_b.len() {
-                            self.cant_unify(
+                            return self.cant_unify(
                                 concrete_a,
                                 concrete_b,
                                 ConstraintMetadata::TupleLength,
                             );
                         }
 
-                        let meta = self.alloc(meta);
+                        let meta = self.alloc(metadata);
 
-                        for (x, y) in elems_a.iter().zip(elems_b) {
+                        for (x, y) in elems_a.iter().zip(*elems_b) {
                             self.add_equal_constraint(
                                 *x,
                                 *y,
@@ -70,16 +98,16 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                         },
                     ) => {
                         if params_a.len() != params_b.len() {
-                            self.cant_unify(
+                            return self.cant_unify(
                                 concrete_a,
                                 concrete_b,
                                 ConstraintMetadata::ParamLength,
                             );
                         }
 
-                        let meta = self.alloc(meta);
+                        let meta = self.alloc(metadata);
 
-                        for (x, y) in params_a.iter().zip(params_b) {
+                        for (x, y) in params_a.iter().zip(*params_b) {
                             self.add_equal_constraint(
                                 *x,
                                 *y,
@@ -94,9 +122,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                         )
                     }
 
-                    (ca, cb) => {
-                        self.cant_unify(ca, cb, meta);
-                    }
+                    (ca, cb) => return self.cant_unify(ca, cb),
                 }
 
                 a
@@ -108,42 +134,66 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         &mut self,
         a: TypeOrVariable<'a>,
         b: TypeOrVariable<'a>,
-        meta: ConstraintMetadata<'a>,
+        meta: &ConstraintMetadata<'a>,
         uf: &mut SolveState<'a>,
     ) {
-        uf.union_by_or_add(&a, &b, |a, b| self.unify_one(a, b, meta))
-            .unwrap_or_lice("all variables were inserted at the start");
+        uf.union_by_or_add(&a, &b, |a, b| {
+            let res = self.unify_one(a, b, meta);
+
+            // println!("{a:?} and {b:?} to {res:?}");
+            res
+        })
+        .unwrap_or_lice("all variables were inserted at the start");
     }
 
-    pub fn solve(mut self, names: &ResolvedNames) -> Result<SolvedTypes<'a>, TypeError> {
+    pub fn solve(mut self) -> Result<SolvedTypes<'a>, TypeError> {
         let mut uf = SolveState::new(std::iter::empty()).unwrap_or_lice("empty iterator");
+        let mut solved_constraints = Vec::new();
 
         while let Some((constraint, meta)) = self.constraints.pop_front() {
             match constraint {
                 Constraint::Equal(a, b) => {
                     // pass uf explicitly
-                    self.unify(a, b, meta, &mut uf);
+                    self.unify(a, b, &meta, &mut uf);
                 }
             }
+
+            solved_constraints.push((constraint, meta));
         }
 
-        let solved_types = SolvedTypes {
-            name_mapping: self.name_mapping,
-            uf,
-        };
-
-        if !self.unification_failures.is_empty() {
-            let ectx = ErrorContext {
-                unification_failures: self.unification_failures,
-                names,
-                spans: self.spans,
-                solved_types,
+        if !self.errors.is_empty() {
+            Err(self.collect_errors())
+            // let mut had = HashMap::new();
+            // for (k, v) in uf.into_inner() {
+            //     if let TypeOrVariable::Error(e) = i {
+            //         if !had.contains(&e) {
+            //             let err = self
+            //                 .errors
+            //                 .get(&e)
+            //                 .unwrap_or_lice("should have been inserted");
+            //             had.insert(e);
+            //
+            //             errors.extend(self.convert_error(err))
+            //         }
+            //     }
+            // }
+        } else {
+            let solved_types = SolvedTypes {
+                name_mapping: self.name_mapping,
+                uf,
             };
 
-            Err(ectx.into_type_error())
-        } else {
             Ok(solved_types)
         }
+    }
+
+    fn convert_error(&self, e: &[FailedUnification]) -> Vec<InnerTypeError> {
+        println!("{e:?}");
+
+        vec![]
+    }
+    fn collect_errors(&self) -> TypeError {
+        todo!()
     }
 }
 
@@ -161,23 +211,26 @@ impl<'a> SolvedTypes<'a> {
     fn find_representative(
         &self,
         var: TypeOrVariable<'a>,
-    ) -> Result<PartialType<'a>, TypeVariable> {
+    ) -> Result<&'a PartialType<'a>, TypeVariable> {
         match self
             .uf
             .find(&var)
             .unwrap_or_lice("type variable not in union find")
         {
-            TypeOrVariable::Concrete(c) => Ok(c),
+            TypeOrVariable::Concrete(c, _) => Ok(c),
             TypeOrVariable::Variable(v) => Err(v),
+            TypeOrVariable::Error(id) => {
+                lice!("these should be filtered out at this point: {id:?}")
+            }
         }
     }
 
     pub(super) fn resolve_type_recursive<'x>(
         &self,
-        ty: impl Into<TypeOrVariable<'a>>,
+        ty: TypeOrVariable<'a>,
         arena: &'x Bump,
     ) -> Type<'x> {
-        let representative = self.find_representative(ty.into()).expect("");
+        let representative = self.find_representative(ty).expect("");
 
         match representative {
             PartialType::Int => Type::Int,
@@ -185,7 +238,7 @@ impl<'a> SolvedTypes<'a> {
             PartialType::Function { params, ret } => {
                 let mut new_params = BumpVec::new_in(arena);
 
-                for i in params {
+                for i in *params {
                     let ty = self.resolve_type_recursive(*i, arena);
                     new_params.push(ty);
                 }
@@ -198,7 +251,7 @@ impl<'a> SolvedTypes<'a> {
             PartialType::Tuple(t) => {
                 let mut new = BumpVec::new_in(arena);
 
-                for i in t {
+                for i in *t {
                     let ty = self.resolve_type_recursive(*i, arena);
                     new.push(ty);
                 }
@@ -211,6 +264,6 @@ impl<'a> SolvedTypes<'a> {
 
     pub fn type_of_name<'x>(&self, name_node_id: MetadataId, arena: &'x Bump) -> Option<Type<'x>> {
         let typevar = self.name_mapping.get(&name_node_id)?;
-        Some(self.resolve_type_recursive(*typevar, arena))
+        Some(self.resolve_type_recursive(TypeOrVariable::Variable(*typevar), arena))
     }
 }

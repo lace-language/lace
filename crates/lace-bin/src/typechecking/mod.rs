@@ -25,8 +25,8 @@ pub fn typecheck<'ast, 'types>(
 ) -> Result<SolvedTypes<'types>, TypeError> {
     let mut type_context = TypeContext::new(arena, spans);
 
-    type_context.add_resolved_names(resolved_names);
     ast.generate_constraints(&mut type_context);
+    type_context.add_resolved_names(resolved_names);
     type_context.save_debug(spans, source);
-    type_context.solve(resolved_names)
+    type_context.solve()
 }

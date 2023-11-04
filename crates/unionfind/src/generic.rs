@@ -4,6 +4,7 @@ use crate::mapping::{
 };
 use crate::union::Union;
 use std::cmp::Ordering;
+use std::error::Error;
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -53,6 +54,10 @@ where
                 .map_err(NewUnionFindErrorSimple::<T, V, M, E>::Extra)?,
             phantom: Default::default(),
         })
+    }
+
+    pub fn into_inner(self) -> M {
+        self.parent
     }
 }
 
@@ -145,6 +150,30 @@ where
         }
     }
 
+    fn union_add_helper<U: Union<T>>(
+        &mut self,
+        parent1: T,
+        parent2: T,
+        union: U,
+    ) -> Result<UnionStatus, UnionOrAddError<U::Err, T, V, M, E>>
+    where
+        T: Clone,
+    {
+        if parent1 == parent2 {
+            return Ok(UnionStatus::AlreadyEquivalent);
+        }
+        let res = union
+            .union(parent1.clone(), parent2.clone())
+            .map_err(UnionOrAddError::NotUnionable)?;
+        if !self.parent.contains_key(&res) {
+            self.add(res.clone()).map_err(UnionOrAddError::AddError)?;
+        }
+
+        self.parent.set(parent1, res.clone());
+        self.parent.set(parent2, res);
+
+        Ok(UnionStatus::PerformedUnion)
+    }
     /// Union two elements in the union find. Try to add the elements if they were not already in.
     pub fn union_by_or_add<U: Union<T>>(
         &mut self,
@@ -162,8 +191,7 @@ where
             .find_shorten_or_add(elem2)
             .map_err(UnionOrAddError::AddError)?;
 
-        self.union_helper(parent1, parent2, union)
-            .map_err(UnionOrAddError::NotUnionable)
+        self.union_add_helper(parent1, parent2, union)
     }
 }
 
@@ -230,7 +258,6 @@ where
         if parent1 == parent2 {
             return Ok(UnionStatus::AlreadyEquivalent);
         }
-
         let res = union.union(parent1.clone(), parent2.clone())?;
 
         self.parent.set(parent1, res.clone());
@@ -323,12 +350,12 @@ where
 }
 
 #[derive(Debug, Error, PartialEq)]
-pub enum AddError<E, P> {
+pub enum AddError<E: Error, P> {
     #[error("couldn't add element to parent mapping")]
     Parent(P),
 
-    #[error("couldn't add element to extra mapping")]
-    Extra(#[source] E),
+    #[error(transparent)]
+    Extra(E),
 }
 
 type AddErrorSimple<T, V, M, E> =

@@ -1,12 +1,15 @@
 use crate::ast_metadata::{Metadata, MetadataId};
 use crate::debug_file::create_debug_file;
+use crate::error::{ErrorId, FailedUnification};
 use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::Ident;
 use crate::parser::span::Spans;
 use crate::source_file::SourceFile;
 use crate::typechecking::constraint::Constraint;
 use crate::typechecking::constraint_metadata::ConstraintMetadata;
-use crate::typechecking::ty::{PartialType, TypeOrVariable, TypeVariable, TypeVariableGenerator};
+use crate::typechecking::ty::{
+    IntoTypeOrVariable, PartialType, TypeOrVariable, TypeVariable, VariableGenerator,
+};
 use bumpalo::Bump;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
@@ -23,7 +26,10 @@ pub struct TypeContext<'a, 'sp> {
     pub arena: &'a Bump,
 
     /// Generates new type variables in increasing order.
-    pub variable_generator: TypeVariableGenerator,
+    pub type_variable_generator: VariableGenerator<TypeVariable>,
+
+    /// Generates new error ids in increasing order.
+    pub error_id_generator: VariableGenerator<ErrorId>,
 
     /// stores constraints. Constraints can only reference type variables,
     /// not concrete types. This makes the union find phase quicker.
@@ -32,7 +38,8 @@ pub struct TypeContext<'a, 'sp> {
     /// Stores a mapping from identifiers to type variables
     pub name_mapping: NameMapping,
 
-    pub unification_failures: Vec<(PartialType<'a>, PartialType<'a>, ConstraintMetadata<'a>)>,
+    pub errors: HashMap<ErrorId, Vec<FailedUnification<'a>>>,
+    pub error_merges: Vec<(ErrorId, ErrorId)>,
 
     pub spans: &'sp Spans,
 }
@@ -40,11 +47,13 @@ pub struct TypeContext<'a, 'sp> {
 impl<'a, 'sp> TypeContext<'a, 'sp> {
     pub fn new(arena: &'a Bump, spans: &'sp Spans) -> Self {
         Self {
-            variable_generator: TypeVariableGenerator::new(),
+            type_variable_generator: VariableGenerator::new(),
+            error_id_generator: VariableGenerator::new(),
             arena,
             constraints: VecDeque::new(),
             name_mapping: Default::default(),
-            unification_failures: vec![],
+            errors: HashMap::new(),
+            error_merges: vec![],
             spans,
         }
     }
@@ -53,7 +62,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
         match self.name_mapping.entry(node_id) {
             Entry::Occupied(o) => *o.get(),
             Entry::Vacant(v) => {
-                let variable = self.variable_generator.fresh();
+                let variable = self.type_variable_generator.fresh();
                 *v.insert(variable)
             }
         }
@@ -68,7 +77,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
     }
 
     pub fn fresh(&mut self) -> TypeVariable {
-        self.variable_generator.fresh()
+        self.type_variable_generator.fresh()
     }
 
     pub fn alloc<T>(&self, value: T) -> &'a T {
@@ -77,12 +86,13 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
 
     pub fn add_equal_constraint(
         &mut self,
-        a: impl Into<TypeOrVariable<'a>>,
-        b: impl Into<TypeOrVariable<'a>>,
+        a: impl IntoTypeOrVariable<'a>,
+        b: impl IntoTypeOrVariable<'a>,
         meta: ConstraintMetadata<'a>,
     ) {
-        self.constraints
-            .push_back((Constraint::Equal(a.into(), b.into()), meta));
+        let constraint =
+            Constraint::Equal(a.into_type_or_variable(self), b.into_type_or_variable(self));
+        self.constraints.push_back((constraint, meta));
     }
 
     pub fn type_of_name(&mut self, ident: &Metadata<Ident>) -> TypeVariable {
@@ -104,7 +114,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                     format!("type variable {}", v.0)
                 }
             }
-            TypeOrVariable::Concrete(c) => match c {
+            TypeOrVariable::Concrete(c, _tv) => match c {
                 PartialType::Int => "int".to_string(),
                 PartialType::Bool => "bool".to_string(),
                 PartialType::Function { params, ret } => format!(
@@ -123,6 +133,7 @@ impl<'a, 'sp> TypeContext<'a, 'sp> {
                 ),
                 PartialType::String => "string".to_string(),
             },
+            TypeOrVariable::Error(_) => "error".to_string(),
         }
     }
 
