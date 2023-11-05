@@ -229,7 +229,7 @@ fn typecheck_expr<'a>(
                     )
                     .on_failed_unification(failed!("left", PartialType::Bool))?;
                     typecheck_expr(
-                        l,
+                        r,
                         ctx,
                         ReturnContext {
                             expected_type: PartialType::Bool,
@@ -359,10 +359,10 @@ fn typecheck_expr<'a>(
         ExprKind::Tuple(_) => {
             todo!()
         }
-        ExprKind::Call(expr, params) => {
+        ExprKind::Call(call, params) => {
             let called_f_ty = ctx.fresh();
             typecheck_expr(
-                expr,
+                call,
                 ctx,
                 ReturnContext {
                     expected_type: called_f_ty.into(),
@@ -390,12 +390,27 @@ fn typecheck_expr<'a>(
                 ret: ctx.alloc(PartialType::Variable(ret_var)),
             };
 
-            if let Err(e) = ctx.unify(called_f_ty, expected_f_ty) {
-                todo!()
+            if let Err((l, r)) = ctx.unify(called_f_ty, expected_f_ty) {
+                if matches!(l, PartialType::Function { .. }) {
+                    return Err(TypeError::FunctionCall {
+                        expected_type: r.to_string(),
+                        actual_span: ctx.span_for(call.metadata),
+                        actual_type: l.to_string(),
+                    });
+                } else {
+                    return Err(TypeError::NotAFunction {
+                        actual_type: l.to_string(),
+                        actual_span: ctx.span_for(call.metadata),
+                    });
+                }
             }
 
-            if let Err(e) = ctx.unify(ret_var, rctx.expected_type) {
-                todo!()
+            if let Err((l, r)) = ctx.unify(ret_var, rctx.expected_type) {
+                return Err(TypeError::FailedUnification(FailedUnification {
+                    expected: r.to_string(),
+                    was: l.to_string(),
+                    was_span: ctx.span_for(expr.metadata),
+                }));
             }
 
             Ok(())

@@ -112,6 +112,17 @@ pub enum TypeError {
         else_ty: String,
         if_block_span: Span,
     },
+    #[error("cannot call this function")]
+    FunctionCall {
+        expected_type: String,
+        actual_span: Span,
+        actual_type: String,
+    },
+    #[error("can only call functions")]
+    NotAFunction {
+        actual_type: String,
+        actual_span: Span,
+    },
 }
 
 impl Diagnostic for TypeError {
@@ -275,6 +286,29 @@ impl Diagnostic for TypeError {
                         else_return_span.length(),
                     ),
                 ]
+                .into_iter(),
+            )),
+            TypeError::FunctionCall {
+                actual_span,
+                actual_type: actual_ty,
+                ..
+            } => Some(Box::new(
+                [LabeledSpan::new(
+                    Some(format!("function has type {actual_ty}")),
+                    actual_span.offset(),
+                    actual_span.length(),
+                )]
+                .into_iter(),
+            )),
+            TypeError::NotAFunction {
+                actual_type: expected_ty,
+                actual_span: expected_span,
+            } => Some(Box::new(
+                [LabeledSpan::new(
+                    Some(format!("has type {expected_ty}")),
+                    expected_span.offset(),
+                    expected_span.length(),
+                )]
                 .into_iter(),
             )),
         }

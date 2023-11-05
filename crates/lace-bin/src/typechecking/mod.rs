@@ -33,7 +33,7 @@ pub fn typecheck<'ast, 'types, 'names>(
 
     let mut variable_generator = TypeVariableGenerator::new();
     let mut ctx = TypeContext::new(resolved_names, arena, spans, &mut variable_generator);
-    static_pass::find_statics_ast(ast, &mut ctx, &mut errs);
+    static_pass::find_statics_ast(ast, &mut ctx);
 
     if !errs.is_empty() {
         return Err(errs);
