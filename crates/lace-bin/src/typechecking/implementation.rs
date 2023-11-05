@@ -46,8 +46,63 @@ fn typecheck_expr<'a>(
             ctx,
             expected_ty,
         ),
-        ExprKind::If(_, _, _) => {
-            todo!()
+        ExprKind::If(condition, l, r) => {
+            typecheck_expr(condition, ctx, PartialType::Bool).on_failed_unification(|uni| {
+                TypeError::IfCondition {
+                    condition_span: ctx.span_for(condition.metadata),
+                    condition_ty: uni.was,
+                    if_span: ctx.span_for(expr.metadata),
+                }
+            })?;
+
+            if let Some(r) = r {
+                let lvar = ctx.fresh();
+                let rvar = ctx.fresh();
+
+                typecheck_block(l, ctx, (lvar.into(), None))?;
+                typecheck_block(r, ctx, (rvar.into(), None))?;
+
+                if let Err((lty, rty)) = ctx.unify(lvar, rvar) {
+                    return Err(TypeError::IfElseEqual {
+                        if_return_span: ctx.span_for(
+                            l.value
+                                .last
+                                .as_ref()
+                                .unwrap_or_lice("should have a return expr")
+                                .metadata,
+                        ),
+                        else_return_span: ctx.span_for(
+                            r.value
+                                .last
+                                .as_ref()
+                                .unwrap_or_lice("should have a return expr")
+                                .metadata,
+                        ),
+                        if_ty: lty.to_string(),
+                        else_ty: rty.to_string(),
+                        if_block_span: ctx.span_for(l.metadata),
+                    });
+                }
+            } else {
+                let lvar = ctx.fresh();
+                typecheck_block(l, ctx, (lvar.into(), None))?;
+
+                if let Err((lty, _)) = ctx.unify(lvar, PartialType::Unit) {
+                    return Err(TypeError::IfWithUnexpectedReturn {
+                        return_span: ctx.span_for(
+                            l.value
+                                .last
+                                .as_ref()
+                                .unwrap_or_lice("should have a return expr")
+                                .metadata,
+                        ),
+                        return_ty: lty.to_string(),
+                        if_block_span: ctx.span_for(l.metadata),
+                    });
+                }
+            }
+
+            Ok(())
         }
         ExprKind::Block(b) => typecheck_block(b, ctx, (expected_ty, None)),
         ExprKind::Ident(v) => {

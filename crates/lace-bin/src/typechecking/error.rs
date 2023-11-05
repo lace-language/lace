@@ -82,6 +82,26 @@ pub enum TypeError {
         was_ret_ty: String,
         was_expr_span: Span,
     },
+    #[error("expected the type of this if condition to be a bool")]
+    IfCondition {
+        condition_span: Span,
+        condition_ty: String,
+        if_span: Span,
+    },
+    #[error("this if block should not have a return expression")]
+    IfWithUnexpectedReturn {
+        return_span: Span,
+        return_ty: String,
+        if_block_span: Span,
+    },
+    #[error("expected the return types of if and else blocks to be equal")]
+    IfElseEqual {
+        if_return_span: Span,
+        else_return_span: Span,
+        if_ty: String,
+        else_ty: String,
+        if_block_span: Span,
+    },
 }
 
 impl Diagnostic for TypeError {
@@ -179,6 +199,59 @@ impl Diagnostic for TypeError {
                     was_expr_span.offset(),
                     was_expr_span.length(),
                 )]
+                .into_iter(),
+            )),
+            TypeError::IfCondition {
+                condition_span,
+                condition_ty,
+                ..
+            } => Some(Box::new(
+                [LabeledSpan::new(
+                    Some(format!("has type {condition_ty}")),
+                    condition_span.offset(),
+                    condition_span.length(),
+                )]
+                .into_iter(),
+            )),
+            TypeError::IfWithUnexpectedReturn {
+                return_span,
+                return_ty,
+                if_block_span: _,
+            } => Some(Box::new(
+                [
+                    LabeledSpan::new(
+                        Some(format!("returns a value here of type {return_ty}")),
+                        return_span.offset(),
+                        return_span.length(),
+                    ),
+                    // TODO: breaks miette
+                    // LabeledSpan::new(
+                    //     Some(format!("should not return or return unit")),
+                    //     if_block_span.offset(),
+                    //     if_block_span.length(),
+                    // ),
+                ]
+                .into_iter(),
+            )),
+            TypeError::IfElseEqual {
+                if_return_span,
+                else_return_span,
+                if_ty,
+                else_ty,
+                if_block_span: _,
+            } => Some(Box::new(
+                [
+                    LabeledSpan::new(
+                        Some(format!("returns a value here of type {if_ty}")),
+                        if_return_span.offset(),
+                        if_return_span.length(),
+                    ),
+                    LabeledSpan::new(
+                        Some(format!("returns a value here of type {else_ty}")),
+                        else_return_span.offset(),
+                        else_return_span.length(),
+                    ),
+                ]
                 .into_iter(),
             )),
         }
