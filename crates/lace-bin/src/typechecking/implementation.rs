@@ -9,15 +9,31 @@ use crate::typechecking::ty::PartialType;
 use crate::typechecking::type_spec_to_partial_type;
 use bumpalo::collections::Vec as BumpVec;
 
+#[derive(Copy, Clone, Debug)]
+pub struct ReturnContext<'a> {
+    // the expected outcome of the current expr
+    expected_type: PartialType<'a>,
+
+    // for explicit returns, return expressions
+    function_return_type: PartialType<'a>,
+    function_return_type_span: MetadataId,
+
+    // for breaks and return expressions etc.
+    block_return_type: PartialType<'a>,
+
+    // is the block we're typechecking the toplevel scope of a function?
+    function_block: bool,
+}
+
 fn typecheck_lit<'a>(
     lit: &Metadata<&Lit>,
     ctx: &mut TypeContext<'a, '_>,
-    expected_ty: PartialType<'a>,
+    rctx: ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     let res = match lit.value {
-        Lit::Bool(_) => ctx.unify(PartialType::Bool, expected_ty),
-        Lit::Int(_) => ctx.unify(PartialType::Int, expected_ty),
-        Lit::String(_) => ctx.unify(PartialType::String, expected_ty),
+        Lit::Bool(_) => ctx.unify(PartialType::Bool, rctx.expected_type),
+        Lit::Int(_) => ctx.unify(PartialType::Int, rctx.expected_type),
+        Lit::String(_) => ctx.unify(PartialType::String, rctx.expected_type),
     };
 
     if let Err((l, r)) = res {
@@ -34,7 +50,7 @@ fn typecheck_lit<'a>(
 fn typecheck_expr<'a>(
     expr: &Expr,
     ctx: &mut TypeContext<'a, '_>,
-    expected_ty: PartialType<'a>,
+    rctx: ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     match &expr.value {
         ExprKind::Lit(lit) => typecheck_lit(
@@ -43,23 +59,45 @@ fn typecheck_expr<'a>(
                 metadata: expr.metadata,
             },
             ctx,
-            expected_ty,
+            rctx,
         ),
         ExprKind::If(condition, l, r) => {
-            typecheck_expr(condition, ctx, PartialType::Bool).on_failed_unification(|uni| {
-                TypeError::IfCondition {
-                    condition_span: ctx.span_for(condition.metadata),
-                    condition_ty: uni.was,
-                    if_span: ctx.span_for(expr.metadata),
-                }
+            typecheck_expr(
+                condition,
+                ctx,
+                ReturnContext {
+                    expected_type: PartialType::Bool,
+                    ..rctx
+                },
+            )
+            .on_failed_unification(|uni| TypeError::IfCondition {
+                condition_span: ctx.span_for(condition.metadata),
+                condition_ty: uni.was,
+                if_span: ctx.span_for(expr.metadata),
             })?;
 
             if let Some(r) = r {
                 let lvar = ctx.fresh();
                 let rvar = ctx.fresh();
 
-                typecheck_block(l, ctx, (lvar.into(), None))?;
-                typecheck_block(r, ctx, (rvar.into(), None))?;
+                typecheck_block(
+                    l,
+                    ctx,
+                    &ReturnContext {
+                        expected_type: lvar.into(),
+                        function_block: false,
+                        ..rctx
+                    },
+                )?;
+                typecheck_block(
+                    r,
+                    ctx,
+                    &ReturnContext {
+                        expected_type: rvar.into(),
+                        function_block: false,
+                        ..rctx
+                    },
+                )?;
 
                 if let Err((lty, rty)) = ctx.unify(lvar, rvar) {
                     return Err(TypeError::IfElseEqual {
@@ -84,7 +122,15 @@ fn typecheck_expr<'a>(
                 }
             } else {
                 let lvar = ctx.fresh();
-                typecheck_block(l, ctx, (lvar.into(), None))?;
+                typecheck_block(
+                    l,
+                    ctx,
+                    &ReturnContext {
+                        expected_type: lvar.into(),
+                        function_block: false,
+                        ..rctx
+                    },
+                )?;
 
                 if let Err((lty, _)) = ctx.unify(lvar, PartialType::Unit) {
                     return Err(TypeError::IfWithUnexpectedReturn {
@@ -103,11 +149,19 @@ fn typecheck_expr<'a>(
 
             Ok(())
         }
-        ExprKind::Block(b) => typecheck_block(b, ctx, (expected_ty, None)),
+        ExprKind::Block(b) => typecheck_block(
+            b,
+            ctx,
+            &ReturnContext {
+                block_return_type: rctx.expected_type,
+                function_block: false,
+                ..rctx
+            },
+        ),
         ExprKind::Ident(v) => {
             let var = ctx.type_variable_for_identifier(v);
 
-            if let Err((l, r)) = ctx.unify(expected_ty, var) {
+            if let Err((l, r)) = ctx.unify(rctx.expected_type, var) {
                 return Err(TypeError::FailedUnification(FailedUnification {
                     expected: l.to_string(),
                     was: r.to_string(),
@@ -117,7 +171,7 @@ fn typecheck_expr<'a>(
 
             Ok(())
         }
-        ExprKind::Paren(e) => typecheck_expr(e, ctx, expected_ty),
+        ExprKind::Paren(e) => typecheck_expr(e, ctx, rctx),
         ExprKind::BinaryOp(op, l, r) => {
             macro_rules! failed {
                 ($side: literal, $ty: expr) => {
@@ -134,12 +188,26 @@ fn typecheck_expr<'a>(
 
             match op.value {
                 BinaryOp::Mul | BinaryOp::Div | BinaryOp::Add | BinaryOp::Sub => {
-                    typecheck_expr(l, ctx, PartialType::Int)
-                        .on_failed_unification(failed!("left", PartialType::Int))?;
-                    typecheck_expr(r, ctx, PartialType::Int)
-                        .on_failed_unification(failed!("right", PartialType::Int))?;
+                    typecheck_expr(
+                        l,
+                        ctx,
+                        ReturnContext {
+                            expected_type: PartialType::Int,
+                            ..rctx
+                        },
+                    )
+                    .on_failed_unification(failed!("left", PartialType::Int))?;
+                    typecheck_expr(
+                        r,
+                        ctx,
+                        ReturnContext {
+                            expected_type: PartialType::Int,
+                            ..rctx
+                        },
+                    )
+                    .on_failed_unification(failed!("right", PartialType::Int))?;
 
-                    if let Err((l, r)) = ctx.unify(PartialType::Int, expected_ty) {
+                    if let Err((l, r)) = ctx.unify(PartialType::Int, rctx.expected_type) {
                         return Err(TypeError::FailedUnification(FailedUnification {
                             expected: r.to_string(),
                             was: l.to_string(),
@@ -150,12 +218,26 @@ fn typecheck_expr<'a>(
                     Ok(())
                 }
                 BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
-                    typecheck_expr(l, ctx, PartialType::Bool)
-                        .on_failed_unification(failed!("left", PartialType::Bool))?;
-                    typecheck_expr(l, ctx, PartialType::Bool)
-                        .on_failed_unification(failed!("right", PartialType::Bool))?;
+                    typecheck_expr(
+                        l,
+                        ctx,
+                        ReturnContext {
+                            expected_type: PartialType::Bool,
+                            ..rctx
+                        },
+                    )
+                    .on_failed_unification(failed!("left", PartialType::Bool))?;
+                    typecheck_expr(
+                        l,
+                        ctx,
+                        ReturnContext {
+                            expected_type: PartialType::Bool,
+                            ..rctx
+                        },
+                    )
+                    .on_failed_unification(failed!("right", PartialType::Bool))?;
 
-                    if let Err((l, r)) = ctx.unify(PartialType::Bool, expected_ty) {
+                    if let Err((l, r)) = ctx.unify(PartialType::Bool, rctx.expected_type) {
                         return Err(TypeError::FailedUnification(FailedUnification {
                             expected: r.to_string(),
                             was: l.to_string(),
@@ -174,8 +256,22 @@ fn typecheck_expr<'a>(
                     let lvar = ctx.fresh();
                     let rvar = ctx.fresh();
 
-                    typecheck_expr(l, ctx, PartialType::Variable(lvar))?;
-                    typecheck_expr(r, ctx, PartialType::Variable(rvar))?;
+                    typecheck_expr(
+                        l,
+                        ctx,
+                        ReturnContext {
+                            expected_type: PartialType::Variable(lvar),
+                            ..rctx
+                        },
+                    )?;
+                    typecheck_expr(
+                        r,
+                        ctx,
+                        ReturnContext {
+                            expected_type: PartialType::Variable(rvar),
+                            ..rctx
+                        },
+                    )?;
 
                     if let Err((lt, rt)) = ctx.unify(lvar, rvar) {
                         return Err(TypeError::Comparison {
@@ -187,7 +283,7 @@ fn typecheck_expr<'a>(
                         });
                     }
 
-                    if let Err((l, r)) = ctx.unify(PartialType::Bool, expected_ty) {
+                    if let Err((l, r)) = ctx.unify(PartialType::Bool, rctx.expected_type) {
                         return Err(TypeError::FailedUnification(FailedUnification {
                             expected: r.to_string(),
                             was: l.to_string(),
@@ -201,17 +297,25 @@ fn typecheck_expr<'a>(
         }
         ExprKind::UnaryOp(op, expr) => match op.value {
             UnaryOp::Not => {
-                typecheck_expr(expr, ctx, PartialType::Bool).on_failed_unification(
-                    |uni: FailedUnification| TypeError::UnaryOp {
+                typecheck_expr(
+                    expr,
+                    ctx,
+                    ReturnContext {
+                        expected_type: PartialType::Bool,
+                        ..rctx
+                    },
+                )
+                .on_failed_unification(|uni: FailedUnification| {
+                    TypeError::UnaryOp {
                         op: op.value,
                         expected_ty: PartialType::Bool.to_string(),
                         was_ty: uni.was.to_string(),
                         expr: ctx.span_for(expr.metadata),
                         op_span: ctx.span_for(op.metadata),
-                    },
-                )?;
+                    }
+                })?;
 
-                if let Err((l, r)) = ctx.unify(PartialType::Bool, expected_ty) {
+                if let Err((l, r)) = ctx.unify(PartialType::Bool, rctx.expected_type) {
                     return Err(TypeError::FailedUnification(FailedUnification {
                         expected: r.to_string(),
                         was: l.to_string(),
@@ -222,17 +326,25 @@ fn typecheck_expr<'a>(
                 Ok(())
             }
             UnaryOp::Neg => {
-                typecheck_expr(expr, ctx, PartialType::Int).on_failed_unification(
-                    |uni: FailedUnification| TypeError::UnaryOp {
+                typecheck_expr(
+                    expr,
+                    ctx,
+                    ReturnContext {
+                        expected_type: PartialType::Int,
+                        ..rctx
+                    },
+                )
+                .on_failed_unification(|uni: FailedUnification| {
+                    TypeError::UnaryOp {
                         op: op.value,
                         expected_ty: PartialType::Int.to_string(),
                         was_ty: uni.was.to_string(),
                         expr: ctx.span_for(expr.metadata),
                         op_span: ctx.span_for(op.metadata),
-                    },
-                )?;
+                    }
+                })?;
 
-                if let Err((l, r)) = ctx.unify(PartialType::Int, expected_ty) {
+                if let Err((l, r)) = ctx.unify(PartialType::Int, rctx.expected_type) {
                     return Err(TypeError::FailedUnification(FailedUnification {
                         expected: r.to_string(),
                         was: l.to_string(),
@@ -248,7 +360,14 @@ fn typecheck_expr<'a>(
         }
         ExprKind::Call(expr, params) => {
             let called_f_ty = ctx.fresh();
-            typecheck_expr(expr, ctx, called_f_ty.into())?;
+            typecheck_expr(
+                expr,
+                ctx,
+                ReturnContext {
+                    expected_type: called_f_ty.into(),
+                    ..rctx
+                },
+            )?;
 
             let ret_var = ctx.fresh();
             let mut param_tys = BumpVec::new_in(ctx.arena);
@@ -256,7 +375,14 @@ fn typecheck_expr<'a>(
                 let tyv = ctx.fresh();
                 param_tys.push(tyv.into());
 
-                typecheck_expr(param, ctx, tyv.into())?;
+                typecheck_expr(
+                    param,
+                    ctx,
+                    ReturnContext {
+                        expected_type: tyv.into(),
+                        ..rctx
+                    },
+                )?;
             }
             let expected_f_ty = PartialType::Function {
                 params: param_tys.into_bump_slice(),
@@ -267,7 +393,7 @@ fn typecheck_expr<'a>(
                 todo!()
             }
 
-            if let Err(e) = ctx.unify(PartialType::Int, expected_ty) {
+            if let Err(e) = ctx.unify(ret_var, rctx.expected_type) {
                 todo!()
             }
 
@@ -279,24 +405,37 @@ fn typecheck_expr<'a>(
 fn typecheck_statement<'a>(
     stmt: &Statement,
     ctx: &mut TypeContext<'a, '_>,
-    // TODO: for `return x` statements
-    _return_type: (PartialType<'a>, Option<MetadataId>),
+    rctx: &ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     match stmt {
         Statement::Expr(e) => {
             let var = ctx.fresh();
-            typecheck_expr(e, ctx, PartialType::Variable(var))
+            typecheck_expr(
+                e,
+                ctx,
+                ReturnContext {
+                    expected_type: var.into(),
+                    ..*rctx
+                },
+            )
         }
         Statement::Let(name, type_spec, expr) => {
-            let expected_ty = type_spec
+            let expected_type = type_spec
                 .as_ref()
                 .map(|i| type_spec_to_partial_type(&i.value, ctx))
                 .unwrap_or_else(|| PartialType::Variable(ctx.fresh()));
 
-            typecheck_expr(expr, ctx, expected_ty)?;
+            typecheck_expr(
+                expr,
+                ctx,
+                ReturnContext {
+                    expected_type,
+                    ..*rctx
+                },
+            )?;
 
             let tv = ctx.type_variable_for_identifier(name);
-            if let Err(_) = ctx.unify(tv, expected_ty) {
+            if let Err(_) = ctx.unify(tv, expected_type) {
                 lice!("should be the first usage of this type variable because this let is the definition")
             }
 
@@ -308,58 +447,74 @@ fn typecheck_statement<'a>(
 fn typecheck_block<'a>(
     block: &Metadata<Block>,
     ctx: &mut TypeContext<'a, '_>,
-    return_type: (PartialType<'a>, Option<MetadataId>),
+    rctx: &ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     for i in block.value.stmts {
-        typecheck_statement(i, ctx, return_type)?;
+        typecheck_statement(i, ctx, rctx)?;
     }
 
     if let Some(ref expr) = block.value.last {
         let expected_ty = ctx.fresh();
-        typecheck_expr(expr, ctx, PartialType::Variable(expected_ty))?;
+        typecheck_expr(
+            expr,
+            ctx,
+            ReturnContext {
+                expected_type: expected_ty.into(),
+                ..*rctx
+            },
+        )?;
 
-        let Err((l, r)) = ctx.unify(return_type.0, expected_ty) else {
+        let Err((l, r)) = ctx.unify(rctx.block_return_type, expected_ty) else {
             return Ok(());
         };
 
-        if let Some(i) = return_type.1 {
-            Err(TypeError::ImplicitReturn {
+        if rctx.function_block {
+            Err(TypeError::ImplicitFunctionReturn {
                 expected_ret_ty: l.to_string(),
-                expected_ret_ty_spec_span: ctx.span_for(i),
+                expected_ret_ty_spec_span: ctx.span_for(rctx.function_return_type_span),
+                was_ret_ty: r.to_string(),
+                was_expr_span: ctx.span_for(expr.metadata),
+            })
+        } else if block.value.last.is_some() {
+            Err(TypeError::UnexpectedReturn {
                 was_ret_ty: r.to_string(),
                 was_expr_span: ctx.span_for(expr.metadata),
             })
         } else {
-            Err(TypeError::UnexpectedReturn {
+            Err(TypeError::ImplicitReturn {
+                expected_ret_ty: l.to_string(),
                 was_ret_ty: r.to_string(),
                 was_expr_span: ctx.span_for(expr.metadata),
             })
         }
     } else {
-        let Err((l, _)) = ctx.unify(return_type.0, PartialType::Unit) else {
+        let Err((l, _)) = ctx.unify(rctx.block_return_type, PartialType::Unit) else {
             return Ok(());
         };
 
-        Err(TypeError::ExpectedReturn {
-            expected_ret_ty: l.to_string(),
-            expected_ret_ty_spec_span: ctx.span_for(
-                return_type.1.unwrap_or_lice(
-                    "if ret == unit and last expr == unit we should never get here",
-                ),
-            ),
-        })
+        if rctx.function_block {
+            Err(TypeError::ExpectedFunctionReturn {
+                expected_ret_ty: l.to_string(),
+                expected_ret_ty_spec_span: ctx.span_for(rctx.function_return_type_span),
+            })
+        } else {
+            Err(TypeError::ExpectedReturn {
+                expected_ret_ty: l.to_string(),
+            })
+        }
     }
 }
 
-fn typecheck_function(f: &Function, ctx: &mut TypeContext) -> Result<(), TypeError> {
+fn typecheck_function(f: &Metadata<Function>, ctx: &mut TypeContext) -> Result<(), TypeError> {
     let return_type = f
+        .value
         .ret
         .as_ref()
         .map(|i| type_spec_to_partial_type(&i.value, ctx))
         .unwrap_or(PartialType::Unit);
 
     let mut params = BumpVec::new_in(ctx.arena);
-    for i in f.parameters {
+    for i in f.value.parameters {
         let ty = type_spec_to_partial_type(&i.type_spec.value, ctx);
         let tyv = ctx.type_variable_for_identifier(&i.name);
         if let Err(_) = ctx.unify(ty, tyv) {
@@ -373,21 +528,32 @@ fn typecheck_function(f: &Function, ctx: &mut TypeContext) -> Result<(), TypeErr
         params: params.into_bump_slice(),
         ret: ctx.alloc(return_type),
     };
-    let ty_var = ctx.type_variable_for_identifier(&f.name);
+    let ty_var = ctx.type_variable_for_identifier(&f.value.name);
 
     if let Err(_) = ctx.unify(ty_var, func_ty) {
         lice!("should never fail because this is the first usage of this type variable, as we're declaring the function it describes here.");
     }
 
     typecheck_block(
-        f.block,
+        f.value.block,
         ctx,
-        (return_type, f.ret.as_ref().map(|i| i.metadata)),
+        &ReturnContext {
+            expected_type: return_type,
+            function_return_type: return_type,
+            function_return_type_span: f
+                .value
+                .ret
+                .as_ref()
+                .map(|i| i.metadata)
+                .unwrap_or(f.metadata),
+            block_return_type: return_type,
+            function_block: true,
+        },
     )
 }
 
 pub(super) fn typecheck_item(item: &Item, ctx: &mut TypeContext) -> Result<(), TypeError> {
     match item {
-        Item::Function(f) => typecheck_function(&f.value, ctx),
+        Item::Function(f) => typecheck_function(&f, ctx),
     }
 }

@@ -67,17 +67,26 @@ pub enum TypeError {
     },
 
     #[error("cannot return value of type {was_ret_ty}")]
-    ImplicitReturn {
+    ImplicitFunctionReturn {
         expected_ret_ty: String,
         expected_ret_ty_spec_span: Span,
         was_ret_ty: String,
         was_expr_span: Span,
     },
-    #[error("expected return expression in this block returning {expected_ret_ty}")]
-    ExpectedReturn {
+    #[error("expected return expression of type {expected_ret_ty}")]
+    ImplicitReturn {
+        expected_ret_ty: String,
+        was_ret_ty: String,
+        was_expr_span: Span,
+    },
+    #[error("expected return expression in this block which should return {expected_ret_ty}")]
+    ExpectedFunctionReturn {
         expected_ret_ty: String,
         expected_ret_ty_spec_span: Span,
     },
+    #[error("expected return expression in this block which should return {expected_ret_ty}")]
+    ExpectedReturn { expected_ret_ty: String },
+
     #[error("unexpected return expression in block returning unit")]
     UnexpectedReturn {
         was_ret_ty: String,
@@ -160,7 +169,7 @@ impl Diagnostic for TypeError {
                 .into_iter(),
             )),
             TypeError::FailedUnification { .. } => None,
-            TypeError::ImplicitReturn {
+            TypeError::ImplicitFunctionReturn {
                 expected_ret_ty,
                 expected_ret_ty_spec_span,
                 was_ret_ty,
@@ -180,7 +189,19 @@ impl Diagnostic for TypeError {
                 ]
                 .into_iter(),
             )),
-            TypeError::ExpectedReturn {
+            TypeError::ImplicitReturn {
+                was_ret_ty,
+                was_expr_span,
+                ..
+            } => Some(Box::new(
+                [LabeledSpan::new(
+                    Some(format!("but got {was_ret_ty}")),
+                    was_expr_span.offset(),
+                    was_expr_span.length(),
+                )]
+                .into_iter(),
+            )),
+            TypeError::ExpectedFunctionReturn {
                 expected_ret_ty_spec_span,
                 ..
             } => Some(Box::new(
@@ -191,6 +212,7 @@ impl Diagnostic for TypeError {
                 )]
                 .into_iter(),
             )),
+            TypeError::ExpectedReturn { .. } => None,
             TypeError::UnexpectedReturn {
                 was_ret_ty,
                 was_expr_span,
