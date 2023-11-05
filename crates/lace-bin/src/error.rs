@@ -21,6 +21,10 @@ pub enum CompilerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Type(#[from] TypeErrors),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SingleType(#[from] TypeError),
 }
 
 #[derive(Debug, Error, Diagnostic, From, Clone, PartialEq)]

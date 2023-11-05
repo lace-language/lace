@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
 
 use crate::ast_metadata::{Metadata, MetadataId};
@@ -18,7 +18,7 @@ use stack_graphs::{
 mod tests;
 
 pub struct ResolvedNames {
-    pub(crate) names: Vec<(MetadataId, MetadataId)>,
+    pub(crate) names: HashMap<MetadataId, MetadataId>,
 }
 
 pub struct Graph {
@@ -151,7 +151,7 @@ impl<'s, 'a> Graph {
         }
 
         ResolvedNames {
-            names: no_shadow_results,
+            names: no_shadow_results.into_iter().collect(),
         }
     }
 

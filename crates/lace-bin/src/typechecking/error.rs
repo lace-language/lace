@@ -26,4 +26,7 @@ pub enum TypeError {
         #[label]
         expr: Span,
     },
+
+    #[error("type was never constrained")]
+    Unresolved,
 }
