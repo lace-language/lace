@@ -28,12 +28,13 @@ impl<T> ResultExt for Result<T, TypeError> {
 
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum TypeError {
-    #[error("expected {side} operand of {op} to be an int")]
+    #[error("expected {side} operand of {op} to be of type {expected_ty}")]
     BinaryOp {
         op: BinaryOp,
         value_ty: String,
         side: &'static str,
 
+        expected_ty: String,
         value_span: Span,
         op_span: Span,
     },
@@ -115,7 +116,7 @@ impl Diagnostic for TypeError {
             } => Some(Box::new(
                 [
                     LabeledSpan::new(
-                        Some(value_ty.clone()),
+                        Some(format!("got {value_ty}")),
                         value_span.offset(),
                         value_span.length(),
                     ),

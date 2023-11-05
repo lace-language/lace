@@ -3,7 +3,6 @@ use crate::lice::Lice;
 use crate::parser::ast::{
     BinaryOp, Block, Expr, ExprKind, Function, Item, Lit, Statement, UnaryOp,
 };
-use crate::typechecking;
 use crate::typechecking::ctx::TypeContext;
 use crate::typechecking::error::{FailedUnification, ResultExt, TypeError};
 use crate::typechecking::ty::PartialType;
@@ -108,79 +107,98 @@ fn typecheck_expr<'a>(
         ExprKind::Ident(v) => {
             let var = ctx.type_variable_for_identifier(v);
 
-            if let Err(e) = ctx.unify(expected_ty, var) {
-                todo!()
+            if let Err((l, r)) = ctx.unify(expected_ty, var) {
+                return Err(TypeError::FailedUnification(FailedUnification {
+                    expected: l.to_string(),
+                    was: r.to_string(),
+                    was_span: ctx.span_for(v.metadata),
+                }));
             }
 
             Ok(())
         }
         ExprKind::Paren(e) => typecheck_expr(e, ctx, expected_ty),
-        ExprKind::BinaryOp(op, l, r) => match op.value {
-            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Add | BinaryOp::Sub => {
-                macro_rules! failed {
-                    ($side: literal) => {
-                        |uni: FailedUnification| TypeError::BinaryOp {
-                            op: op.value,
-                            value_ty: uni.was,
-                            side: $side,
-                            value_span: uni.was_span,
-                            op_span: ctx.span_for(op.metadata),
-                        }
-                    };
-                }
-
-                typecheck_expr(l, ctx, PartialType::Int).on_failed_unification(failed!("left"))?;
-                typecheck_expr(r, ctx, PartialType::Int).on_failed_unification(failed!("right"))?;
-
-                if let Err(e) = ctx.unify(PartialType::Int, expected_ty) {
-                    todo!()
-                }
-
-                Ok(())
-            }
-            BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
-                typecheck_expr(l, ctx, PartialType::Bool)?;
-                typecheck_expr(l, ctx, PartialType::Bool)?;
-
-                if let Err(e) = ctx.unify(PartialType::Bool, expected_ty) {
-                    todo!()
-                }
-
-                Ok(())
-            }
-            BinaryOp::Gt
-            | BinaryOp::Gte
-            | BinaryOp::Lt
-            | BinaryOp::Lte
-            | BinaryOp::Eq
-            | BinaryOp::Neq => {
-                let lvar = ctx.fresh();
-                let rvar = ctx.fresh();
-
-                typecheck_expr(l, ctx, PartialType::Variable(lvar))?;
-                typecheck_expr(r, ctx, PartialType::Variable(rvar))?;
-
-                if let Err((lt, rt)) = ctx.unify(lvar, rvar) {
-                    return Err(TypeError::Comparison {
+        ExprKind::BinaryOp(op, l, r) => {
+            macro_rules! failed {
+                ($side: literal, $ty: expr) => {
+                    |uni: FailedUnification| TypeError::BinaryOp {
                         op: op.value,
-                        left_ty: lt.to_string(),
-                        right_ty: rt.to_string(),
-                        left: ctx.span_for(l.metadata),
-                        right: ctx.span_for(r.metadata),
-                    });
-                }
-
-                if let Err((l, r)) = ctx.unify(PartialType::Bool, expected_ty) {
-                    return Err(TypeError::FailedUnification(FailedUnification {
-                        expected: r.to_string(),
-                        was: l.to_string(),
-                        was_span: ctx.span_for(expr.metadata),
-                    }));
-                }
-
-                Ok(())
+                        value_ty: uni.was,
+                        expected_ty: $ty.to_string(),
+                        side: $side,
+                        value_span: uni.was_span,
+                        op_span: ctx.span_for(op.metadata),
+                    }
+                };
             }
-        },
+
+            match op.value {
+                BinaryOp::Mul | BinaryOp::Div | BinaryOp::Add | BinaryOp::Sub => {
+                    typecheck_expr(l, ctx, PartialType::Int)
+                        .on_failed_unification(failed!("left", PartialType::Int))?;
+                    typecheck_expr(r, ctx, PartialType::Int)
+                        .on_failed_unification(failed!("right", PartialType::Int))?;
+
+                    if let Err((l, r)) = ctx.unify(PartialType::Int, expected_ty) {
+                        return Err(TypeError::FailedUnification(FailedUnification {
+                            expected: r.to_string(),
+                            was: l.to_string(),
+                            was_span: ctx.span_for(expr.metadata),
+                        }));
+                    }
+
+                    Ok(())
+                }
+                BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
+                    typecheck_expr(l, ctx, PartialType::Bool)
+                        .on_failed_unification(failed!("left", PartialType::Bool))?;
+                    typecheck_expr(l, ctx, PartialType::Bool)
+                        .on_failed_unification(failed!("right", PartialType::Bool))?;
+
+                    if let Err((l, r)) = ctx.unify(PartialType::Bool, expected_ty) {
+                        return Err(TypeError::FailedUnification(FailedUnification {
+                            expected: r.to_string(),
+                            was: l.to_string(),
+                            was_span: ctx.span_for(expr.metadata),
+                        }));
+                    }
+
+                    Ok(())
+                }
+                BinaryOp::Gt
+                | BinaryOp::Gte
+                | BinaryOp::Lt
+                | BinaryOp::Lte
+                | BinaryOp::Eq
+                | BinaryOp::Neq => {
+                    let lvar = ctx.fresh();
+                    let rvar = ctx.fresh();
+
+                    typecheck_expr(l, ctx, PartialType::Variable(lvar))?;
+                    typecheck_expr(r, ctx, PartialType::Variable(rvar))?;
+
+                    if let Err((lt, rt)) = ctx.unify(lvar, rvar) {
+                        return Err(TypeError::Comparison {
+                            op: op.value,
+                            left_ty: lt.to_string(),
+                            right_ty: rt.to_string(),
+                            left: ctx.span_for(l.metadata),
+                            right: ctx.span_for(r.metadata),
+                        });
+                    }
+
+                    if let Err((l, r)) = ctx.unify(PartialType::Bool, expected_ty) {
+                        return Err(TypeError::FailedUnification(FailedUnification {
+                            expected: r.to_string(),
+                            was: l.to_string(),
+                            was_span: ctx.span_for(expr.metadata),
+                        }));
+                    }
+
+                    Ok(())
+                }
+            }
+        }
         ExprKind::UnaryOp(op, expr) => match op.value {
             UnaryOp::Not => {
                 typecheck_expr(expr, ctx, PartialType::Bool).on_failed_unification(
@@ -225,7 +243,7 @@ fn typecheck_expr<'a>(
                 Ok(())
             }
         },
-        ExprKind::Tuple(t) => {
+        ExprKind::Tuple(_) => {
             todo!()
         }
         ExprKind::Call(expr, params) => {
