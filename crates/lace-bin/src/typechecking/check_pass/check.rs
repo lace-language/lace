@@ -15,6 +15,7 @@ pub struct ReturnContext<'a> {
     expected_type: PartialType<'a>,
 
     // for explicit returns, return expressions
+    #[allow(unused)]
     function_return_type: PartialType<'a>,
     function_return_type_span: MetadataId,
 
@@ -27,7 +28,7 @@ pub struct ReturnContext<'a> {
 
 fn typecheck_lit<'a>(
     lit: &Metadata<&Lit>,
-    ctx: &mut TypeContext<'a, '_>,
+    ctx: &mut TypeContext<'a, '_, '_>,
     rctx: ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     let res = match lit.value {
@@ -49,7 +50,7 @@ fn typecheck_lit<'a>(
 
 fn typecheck_expr<'a>(
     expr: &Expr,
-    ctx: &mut TypeContext<'a, '_>,
+    ctx: &mut TypeContext<'a, '_, '_>,
     rctx: ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     match &expr.value {
@@ -404,7 +405,7 @@ fn typecheck_expr<'a>(
 
 fn typecheck_statement<'a>(
     stmt: &Statement,
-    ctx: &mut TypeContext<'a, '_>,
+    ctx: &mut TypeContext<'a, '_, '_>,
     rctx: &ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     match stmt {
@@ -422,7 +423,7 @@ fn typecheck_statement<'a>(
         Statement::Let(name, type_spec, expr) => {
             let expected_type = type_spec
                 .as_ref()
-                .map(|i| type_spec_to_partial_type(&i.value, ctx))
+                .map(|i| type_spec_to_partial_type(&i.value))
                 .unwrap_or_else(|| PartialType::Variable(ctx.fresh()));
 
             typecheck_expr(
@@ -446,7 +447,7 @@ fn typecheck_statement<'a>(
 
 fn typecheck_block<'a>(
     block: &Metadata<Block>,
-    ctx: &mut TypeContext<'a, '_>,
+    ctx: &mut TypeContext<'a, '_, '_>,
     rctx: &ReturnContext<'a>,
 ) -> Result<(), TypeError> {
     for i in block.value.stmts {
@@ -506,33 +507,12 @@ fn typecheck_block<'a>(
 }
 
 fn typecheck_function(f: &Metadata<Function>, ctx: &mut TypeContext) -> Result<(), TypeError> {
-    let return_type = f
-        .value
-        .ret
-        .as_ref()
-        .map(|i| type_spec_to_partial_type(&i.value, ctx))
-        .unwrap_or(PartialType::Unit);
-
-    let mut params = BumpVec::new_in(ctx.arena);
-    for i in f.value.parameters {
-        let ty = type_spec_to_partial_type(&i.type_spec.value, ctx);
-        let tyv = ctx.type_variable_for_identifier(&i.name);
-        if let Err(_) = ctx.unify(ty, tyv) {
-            lice!("should never fail because this is the first usage of this type variable, as we're declaring the parameter it describes here.");
-        }
-
-        params.push(tyv.into())
-    }
-
-    let func_ty = PartialType::Function {
-        params: params.into_bump_slice(),
-        ret: ctx.alloc(return_type),
-    };
     let ty_var = ctx.type_variable_for_identifier(&f.value.name);
+    let Some(PartialType::Function { ret, .. }) = ctx.types.type_of_type_variable(ty_var) else {
+        lice!("static pass should have resolved this type");
+    };
 
-    if let Err(_) = ctx.unify(ty_var, func_ty) {
-        lice!("should never fail because this is the first usage of this type variable, as we're declaring the function it describes here.");
-    }
+    let return_type = **ret;
 
     typecheck_block(
         f.value.block,

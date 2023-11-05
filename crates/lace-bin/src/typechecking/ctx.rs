@@ -6,6 +6,7 @@ use crate::typechecking::ty::{PartialType, TypeVariable, TypeVariableGenerator};
 use bumpalo::Bump;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct Types<'a> {
     data: HashMap<TypeVariable, PartialType<'a>>,
 }
@@ -62,23 +63,29 @@ impl<'a> Types<'a> {
     }
 }
 
-pub struct TypeContext<'a, 'r> {
+#[derive(Clone)]
+pub struct TypeContext<'a, 'r, 't> {
     pub(super) name_mapping: HashMap<MetadataId, TypeVariable>,
     pub(super) node_types: HashMap<MetadataId, PartialType<'a>>,
     pub(super) types: Types<'a>,
-    variable_generator: TypeVariableGenerator,
+    variable_generator: &'t TypeVariableGenerator,
     resolved_names: &'r ResolvedNames,
     pub arena: &'a Bump,
     spans: &'r Spans,
 }
 
-impl<'a, 'r> TypeContext<'a, 'r> {
-    pub fn new(resolved_names: &'r ResolvedNames, arena: &'a Bump, spans: &'r Spans) -> Self {
+impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
+    pub fn new(
+        resolved_names: &'r ResolvedNames,
+        arena: &'a Bump,
+        spans: &'r Spans,
+        variable_generator: &'t TypeVariableGenerator,
+    ) -> Self {
         Self {
             name_mapping: Default::default(),
             node_types: Default::default(),
             types: Types::new(),
-            variable_generator: TypeVariableGenerator::new(),
+            variable_generator,
             resolved_names,
             arena,
             spans,

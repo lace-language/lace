@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Used after type checking, contains no unresolved types
 #[derive(Copy, Clone)]
@@ -97,18 +98,18 @@ pub struct TypeVariable(pub usize);
 
 /// generates new type variables in increasing order.
 pub struct TypeVariableGenerator {
-    curr: usize,
+    curr: AtomicUsize,
 }
 
 impl TypeVariableGenerator {
     pub fn new() -> Self {
-        Self { curr: 0 }
+        Self {
+            curr: AtomicUsize::new(0),
+        }
     }
 
-    pub fn fresh(&mut self) -> TypeVariable {
-        let old = self.curr;
-        self.curr += 1;
-        TypeVariable(old)
+    pub fn fresh(&self) -> TypeVariable {
+        TypeVariable(self.curr.fetch_add(1, Ordering::Relaxed))
     }
 }
 
