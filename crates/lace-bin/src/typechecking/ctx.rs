@@ -6,7 +6,7 @@ use crate::typechecking::ty::{PartialType, TypeVariable, TypeVariableGenerator};
 use bumpalo::Bump;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Types<'a> {
     data: HashMap<TypeVariable, PartialType<'a>>,
 }

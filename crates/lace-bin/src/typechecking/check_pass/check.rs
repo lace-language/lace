@@ -436,10 +436,7 @@ fn typecheck_statement<'a>(
             )
         }
         Statement::Let(name, type_spec, expr) => {
-            let expected_type = type_spec
-                .as_ref()
-                .map(|i| type_spec_to_partial_type(&i.value))
-                .unwrap_or_else(|| PartialType::Variable(ctx.fresh()));
+            let expected_type = ctx.fresh().into();
 
             typecheck_expr(
                 expr,
@@ -450,8 +447,21 @@ fn typecheck_statement<'a>(
                 },
             )?;
 
+            if let Some(i) = type_spec {
+                let type_spec = type_spec_to_partial_type(&i.value);
+
+                if let Err((l, _)) = ctx.unify(expected_type, type_spec) {
+                    return Err(TypeError::LetSpec {
+                        type_spec_span: ctx.span_for(i.metadata),
+                        type_spec_type: type_spec.to_string(),
+                        was_type: l.to_string(),
+                        expr_span: ctx.span_for(expr.metadata),
+                    });
+                }
+            };
+
             let tv = ctx.type_variable_for_identifier(name);
-            if let Err(_) = ctx.unify(tv, expected_type) {
+            if ctx.unify(tv, expected_type).is_err() {
                 lice!("should be the first usage of this type variable because this let is the definition")
             }
 
@@ -549,6 +559,6 @@ fn typecheck_function(f: &Metadata<Function>, ctx: &mut TypeContext) -> Result<(
 
 pub(super) fn typecheck_item(item: &Item, ctx: &mut TypeContext) -> Result<(), TypeError> {
     match item {
-        Item::Function(f) => typecheck_function(&f, ctx),
+        Item::Function(f) => typecheck_function(f, ctx),
     }
 }

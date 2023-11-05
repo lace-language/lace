@@ -2,6 +2,11 @@
 
 #[macro_use]
 mod lice;
+
+#[cfg(test)]
+#[macro_use]
+mod test;
+
 mod ast_metadata;
 mod debug_file;
 mod error;

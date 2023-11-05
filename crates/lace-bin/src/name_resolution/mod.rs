@@ -17,6 +17,7 @@ use stack_graphs::{
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
 pub struct ResolvedNames {
     pub(crate) names: HashMap<MetadataId, MetadataId>,
 }

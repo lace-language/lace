@@ -12,6 +12,8 @@ pub mod ctx;
 pub mod error;
 pub mod solved;
 pub mod static_pass;
+#[cfg(test)]
+pub mod test;
 pub mod ty;
 
 fn type_spec_to_partial_type<'a>(spec: &TypeSpec) -> PartialType<'a> {
@@ -23,16 +25,16 @@ fn type_spec_to_partial_type<'a>(spec: &TypeSpec) -> PartialType<'a> {
     }
 }
 
-pub fn typecheck<'ast, 'types, 'names>(
-    ast: &Ast<'_, 'ast>,
+pub fn typecheck<'types, 'names>(
+    ast: &Ast<'_, '_>,
     resolved_names: &'names ResolvedNames,
     spans: &'names Spans,
     arena: &'types Bump,
 ) -> Result<SolvedTypes<'types, 'names>, Vec<TypeError>> {
     let mut errs = Vec::new();
 
-    let mut variable_generator = TypeVariableGenerator::new();
-    let mut ctx = TypeContext::new(resolved_names, arena, spans, &mut variable_generator);
+    let variable_generator = TypeVariableGenerator::new();
+    let mut ctx = TypeContext::new(resolved_names, arena, spans, &variable_generator);
     static_pass::find_statics_ast(ast, &mut ctx);
 
     if !errs.is_empty() {

@@ -7,10 +7,10 @@ use std::collections::HashMap;
 
 pub mod check;
 
-pub fn typecheck_ast<'a, 'n, 't>(
+pub fn typecheck_ast<'a, 'n>(
     ast: &Ast,
     resolved_names: &'n ResolvedNames,
-    global_ctx: TypeContext<'a, 'n, 't>,
+    global_ctx: TypeContext<'a, 'n, '_>,
     errs: &mut Vec<TypeError>,
 ) -> SolvedTypes<'a, 'n> {
     let mut global_name_mapping = HashMap::new();

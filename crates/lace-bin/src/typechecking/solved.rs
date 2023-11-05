@@ -8,6 +8,7 @@ use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct SolvedTypes<'a, 'n> {
     types: Types<'a>,
     /// TODO: give expr nodes types as well

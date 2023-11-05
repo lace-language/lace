@@ -123,6 +123,13 @@ pub enum TypeError {
         actual_type: String,
         actual_span: Span,
     },
+    #[error("expression cannot be assigned to variable specified to have type {type_spec_type}")]
+    LetSpec {
+        type_spec_span: Span,
+        type_spec_type: String,
+        was_type: String,
+        expr_span: Span,
+    },
 }
 
 impl Diagnostic for TypeError {
@@ -217,7 +224,7 @@ impl Diagnostic for TypeError {
                 ..
             } => Some(Box::new(
                 [LabeledSpan::new(
-                    Some(format!("because of this type specification")),
+                    Some("because of this type specification".to_string()),
                     expected_ret_ty_spec_span.offset(),
                     expected_ret_ty_spec_span.length(),
                 )]
@@ -309,6 +316,29 @@ impl Diagnostic for TypeError {
                     expected_span.offset(),
                     expected_span.length(),
                 )]
+                .into_iter(),
+            )),
+            TypeError::LetSpec {
+                type_spec_span,
+                was_type,
+                expr_span,
+                ..
+            } => Some(Box::new(
+                [
+                    LabeledSpan::new(
+                        Some(
+                            "cannot be assigned to variable with this type specification"
+                                .to_string(),
+                        ),
+                        type_spec_span.offset(),
+                        type_spec_span.length(),
+                    ),
+                    LabeledSpan::new(
+                        Some(format!("has type {was_type}")),
+                        expr_span.offset(),
+                        expr_span.length(),
+                    ),
+                ]
                 .into_iter(),
             )),
         }
