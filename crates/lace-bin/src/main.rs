@@ -12,7 +12,6 @@ mod source_file;
 mod typechecking;
 
 use crate::error::{CompilerError, ResultExt, TypeErrors};
-use crate::lice::Lice;
 use crate::parser::ast::Ast;
 use crate::source_file::SourceFile;
 use bumpalo::Bump;
@@ -44,8 +43,7 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
     graph.save_debug();
 
     let type_arena = Bump::new();
-    let types =
-        typecheck(&ast, &resolved, &spans, source, &type_arena).map_err(TypeErrors::from)?;
+    let types = typecheck(&ast, &resolved, &spans, &type_arena).map_err(TypeErrors::from)?;
 
     let disp_arena = Bump::new();
     eprintln!("resolved {} references", resolved.names.len());

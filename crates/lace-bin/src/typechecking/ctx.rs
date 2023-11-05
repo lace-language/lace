@@ -1,7 +1,7 @@
-use crate::ast_metadata::{Metadata, MetadataId, WithNodeId};
-use crate::lice::Lice;
+use crate::ast_metadata::{Metadata, MetadataId};
 use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::Ident;
+use crate::parser::span::{Span, Spans};
 use crate::typechecking::ty::{PartialType, TypeVariable, TypeVariableGenerator};
 use bumpalo::Bump;
 use std::collections::HashMap;
@@ -17,11 +17,11 @@ impl<'a> Types<'a> {
         }
     }
 
-    pub fn add_type_variable(&mut self, var: TypeVariable) {
-        self.data
-            .insert(var, PartialType::Variable(var))
-            .unwrap_or_lice("duplicate type variable");
-    }
+    // pub fn add_type_variable(&mut self, var: TypeVariable) {
+    //     self.data
+    //         .insert(var, PartialType::Variable(var))
+    //         .unwrap_or_lice("duplicate type variable");
+    // }
 
     pub fn type_of_type_variable(&self, var: TypeVariable) -> Option<&PartialType<'a>> {
         // NOTE: the double lookup here is because of a limitation in Rust's borrow checking.
@@ -69,10 +69,11 @@ pub struct TypeContext<'a, 'r> {
     variable_generator: TypeVariableGenerator,
     resolved_names: &'r ResolvedNames,
     pub arena: &'a Bump,
+    spans: &'r Spans,
 }
 
 impl<'a, 'r> TypeContext<'a, 'r> {
-    pub fn new(resolved_names: &'r ResolvedNames, arena: &'a Bump) -> Self {
+    pub fn new(resolved_names: &'r ResolvedNames, arena: &'a Bump, spans: &'r Spans) -> Self {
         Self {
             name_mapping: Default::default(),
             node_types: Default::default(),
@@ -80,7 +81,12 @@ impl<'a, 'r> TypeContext<'a, 'r> {
             variable_generator: TypeVariableGenerator::new(),
             resolved_names,
             arena,
+            spans,
         }
+    }
+
+    pub fn span_for(&self, meta: MetadataId) -> Span {
+        self.spans.get(meta)
     }
 
     pub fn fresh(&mut self) -> TypeVariable {
@@ -109,10 +115,6 @@ impl<'a, 'r> TypeContext<'a, 'r> {
             .or_insert_with(|| self.variable_generator.fresh())
     }
 
-    pub fn type_of_type_variable(&mut self, var: TypeVariable) -> Option<&PartialType<'a>> {
-        self.types.type_of_type_variable(var)
-    }
-
     pub fn unify(
         &mut self,
         a: impl Into<PartialType<'a>>,
@@ -131,11 +133,7 @@ impl<'a, 'r> TypeContext<'a, 'r> {
             (PartialType::Int, PartialType::Int) => {}
             (PartialType::String, PartialType::String) => {}
             (PartialType::Bool, PartialType::Bool) => {}
-            (PartialType::Tuple(a), PartialType::Tuple(b)) => {
-                if a.len() != b.len() {
-                    return Err(UnifyError::TupleLength);
-                }
-
+            (PartialType::Tuple(a), PartialType::Tuple(b)) if a.len() == b.len() => {
                 for (l, r) in a.iter().zip(b) {
                     self.unify(*l, *r)?;
                 }
@@ -150,11 +148,7 @@ impl<'a, 'r> TypeContext<'a, 'r> {
                     params: b_params,
                     ret: b_ret,
                 },
-            ) => {
-                if a_params.len() != b_params.len() {
-                    return Err(UnifyError::FunctionParamLength);
-                }
-
+            ) if a_params.len() == b_params.len() => {
                 for (l, r) in a_params.iter().zip(b_params) {
                     self.unify(*l, *r)?;
                 }
@@ -162,16 +156,11 @@ impl<'a, 'r> TypeContext<'a, 'r> {
                 self.unify(*a_ret, *b_ret)?;
             }
 
-            (a, b) => return Err(UnifyError::NotEqual(a, b)),
+            (a, b) => return Err((a, b)),
         }
 
         Ok(())
     }
 }
 
-#[derive(Debug)]
-pub enum UnifyError<'a> {
-    NotEqual(PartialType<'a>, PartialType<'a>),
-    TupleLength,
-    FunctionParamLength,
-}
+pub type UnifyError<'a> = (PartialType<'a>, PartialType<'a>);

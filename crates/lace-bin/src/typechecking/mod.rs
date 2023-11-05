@@ -1,14 +1,11 @@
-use crate::lice::Lice;
 use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::{Ast, TypeSpec};
 use crate::parser::span::Spans;
-use crate::source_file::SourceFile;
 use crate::typechecking::ctx::{TypeContext, Types};
 use crate::typechecking::error::TypeError;
 use crate::typechecking::solved::SolvedTypes;
 use crate::typechecking::ty::PartialType;
 use bumpalo::Bump;
-use itertools::Itertools;
 use std::collections::HashMap;
 
 pub mod ctx;
@@ -33,7 +30,6 @@ pub fn typecheck<'ast, 'types, 'names>(
     ast: &Ast<'_, 'ast>,
     resolved_names: &'names ResolvedNames,
     spans: &Spans,
-    source: SourceFile<'ast>,
     arena: &'types Bump,
 ) -> Result<SolvedTypes<'types, 'names>, Vec<TypeError>> {
     let mut errs = Vec::new();
@@ -42,7 +38,7 @@ pub fn typecheck<'ast, 'types, 'names>(
     let mut global_types = Types::new();
 
     for item in ast.items {
-        let mut ctx = TypeContext::new(resolved_names, arena);
+        let mut ctx = TypeContext::new(resolved_names, arena, spans);
         if let Err(e) = implementation::typecheck_item(item, &mut ctx) {
             errs.push(e);
         }

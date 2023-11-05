@@ -10,6 +10,8 @@ use std::collections::HashMap;
 
 pub struct SolvedTypes<'a, 'n> {
     types: Types<'a>,
+    /// TODO: give expr nodes types as well
+    #[allow(unused)]
     node_types: HashMap<MetadataId, PartialType<'a>>,
     name_mapping: HashMap<MetadataId, TypeVariable>,
     resolved_names: &'n ResolvedNames,
