@@ -63,7 +63,7 @@ fn typecheck_expr<'a>(
             ctx,
             return_context,
         ),
-        ExprKind::If(condition, l, r) => {
+        ExprKind::If(condition, if_true, if_false) => {
             typecheck_expr(
                 condition,
                 ctx,
@@ -78,15 +78,15 @@ fn typecheck_expr<'a>(
                 if_span: ctx.span_for(expr.metadata),
             })?;
 
-            if let Some(r) = r {
-                let lvar = ctx.fresh();
-                let rvar = ctx.fresh();
+            if let Some(r) = if_false {
+                let if_true_var = ctx.fresh();
+                let if_false_var = ctx.fresh();
 
                 typecheck_block(
-                    l,
+                    if_true,
                     ctx,
                     &ReturnContext {
-                        expected_type: lvar.into(),
+                        expected_type: if_true_var.into(),
                         is_function_block: false,
                         ..return_context
                     },
@@ -95,16 +95,17 @@ fn typecheck_expr<'a>(
                     r,
                     ctx,
                     &ReturnContext {
-                        expected_type: rvar.into(),
+                        expected_type: if_false_var.into(),
                         is_function_block: false,
                         ..return_context
                     },
                 )?;
 
-                if let Err((lty, rty)) = ctx.unify(lvar, rvar) {
+                if let Err((if_true_ty, if_false_ty)) = ctx.unify(if_true_var, if_false_var) {
                     return Err(TypeError::IfElseEqual {
                         if_return_span: ctx.span_for(
-                            l.value
+                            if_true
+                                .value
                                 .last
                                 .as_ref()
                                 .unwrap_or_lice("should have a return expr")
@@ -117,34 +118,35 @@ fn typecheck_expr<'a>(
                                 .unwrap_or_lice("should have a return expr")
                                 .metadata,
                         ),
-                        if_ty: lty.to_string(),
-                        else_ty: rty.to_string(),
-                        if_block_span: ctx.span_for(l.metadata),
+                        if_ty: if_true_ty.to_string(),
+                        else_ty: if_false_ty.to_string(),
+                        if_block_span: ctx.span_for(if_true.metadata),
                     });
                 }
             } else {
-                let lvar = ctx.fresh();
+                let if_true_var = ctx.fresh();
                 typecheck_block(
-                    l,
+                    if_true,
                     ctx,
                     &ReturnContext {
-                        expected_type: lvar.into(),
+                        expected_type: if_true_var.into(),
                         is_function_block: false,
                         ..return_context
                     },
                 )?;
 
-                if let Err((lty, _)) = ctx.unify(lvar, PartialType::Unit) {
+                if let Err((if_true_ty, _)) = ctx.unify(if_true_var, PartialType::Unit) {
                     return Err(TypeError::IfWithUnexpectedReturn {
                         return_span: ctx.span_for(
-                            l.value
+                            if_true
+                                .value
                                 .last
                                 .as_ref()
                                 .unwrap_or_lice("should have a return expr")
                                 .metadata,
                         ),
-                        return_ty: lty.to_string(),
-                        if_block_span: ctx.span_for(l.metadata),
+                        return_ty: if_true_ty.to_string(),
+                        if_block_span: ctx.span_for(if_true.metadata),
                     });
                 }
             }
