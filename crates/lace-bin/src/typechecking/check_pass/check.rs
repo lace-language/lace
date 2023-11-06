@@ -31,11 +31,12 @@ fn typecheck_lit<'a>(
     ctx: &mut TypeContext<'a, '_, '_>,
     rctx: ReturnContext<'a>,
 ) -> Result<(), TypeError> {
-    let res = match lit.value {
-        Lit::Bool(_) => ctx.unify(PartialType::Bool, rctx.expected_type),
-        Lit::Int(_) => ctx.unify(PartialType::Int, rctx.expected_type),
-        Lit::String(_) => ctx.unify(PartialType::String, rctx.expected_type),
+    let partial_type = match lit.value {
+        Lit::Bool(_) => PartialType::Bool,
+        Lit::Int(_) => PartialType::Int,
+        Lit::String(_) => PartialType::String,
     };
+    let res = ctx.unify(partial_type, rctx.expected_type);
 
     if let Err((l, r)) = res {
         return Err(TypeError::FailedUnification(FailedUnification {
