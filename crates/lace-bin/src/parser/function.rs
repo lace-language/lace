@@ -3,7 +3,7 @@ use crate::lexer::token::Token;
 use crate::parser::ast::{Function, Parameter};
 use crate::parser::error::ParseResult;
 use crate::parser::Parser;
-use bumpalo::collections::Vec;
+use bumpalo::collections::Vec as BumpVec;
 
 impl<'s, 'a> Parser<'s, 'a> {
     fn parse_parameter(&mut self) -> ParseResult<Parameter<'s>> {
@@ -22,7 +22,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             return Ok(&[]);
         }
 
-        let mut parameters = Vec::new_in(self.arena);
+        let mut parameters = BumpVec::new_in(self.arena);
         parameters.push(self.parse_parameter()?);
 
         while self.accept_optional(tok![,])?.is_some() {

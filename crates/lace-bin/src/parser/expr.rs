@@ -4,7 +4,7 @@ use crate::parser::ast::{Expr, ExprKind, Ident, Lit};
 use crate::parser::error::{ParseError, ParseResult};
 use crate::parser::precedence::Compatibility;
 use crate::parser::Parser;
-use bumpalo::collections::Vec;
+use bumpalo::collections::Vec as BumpVec;
 
 use super::ast::{BinaryOp, UnaryOp};
 
@@ -116,7 +116,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             return Ok(a.with_metadata(self.spans.store(start_span.merge(&end_span))));
         }
 
-        let mut parameters = Vec::new_in(self.arena);
+        let mut parameters = BumpVec::new_in(self.arena);
         parameters.push(self.expr()?);
 
         while self.accept_optional(tok![,])?.is_some() {
@@ -215,7 +215,7 @@ impl<'s, 'a> Parser<'s, 'a> {
             );
         }
 
-        let mut vec = Vec::new_in(self.arena);
+        let mut vec = BumpVec::new_in(self.arena);
         vec.push(expr);
 
         while self.accept_optional(tok![,])?.is_some() {
