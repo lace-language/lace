@@ -18,19 +18,11 @@ impl<'a> Types<'a> {
         }
     }
 
-    // pub fn add_type_variable(&mut self, var: TypeVariable) {
-    //     self.data
-    //         .insert(var, PartialType::Variable(var))
-    //         .unwrap_or_lice("duplicate type variable");
-    // }
-
     pub fn type_of_type_variable(&self, var: TypeVariable) -> Option<&PartialType<'a>> {
-        // NOTE: the double lookup here is because of a limitation in Rust's borrow checking.
-        // NLL is not enough, and to make this a single get we need polonius. :(
         match self.data.get(&var)? {
-            PartialType::Variable(v) if *v == var => self.data.get(&var),
+            p @ PartialType::Variable(v) if *v == var => Some(p),
             PartialType::Variable(v) => self.type_of_type_variable(*v),
-            _ => self.data.get(&var),
+            p => Some(p),
         }
     }
 

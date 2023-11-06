@@ -396,7 +396,7 @@ fn typecheck_expr<'a>(
             };
 
             if let Err((l, r)) = ctx.unify(called_f_ty, expected_f_ty) {
-                if matches!(l, PartialType::Function { .. }) {
+                if let PartialType::Function { .. } = l {
                     return Err(TypeError::FunctionCall {
                         expected_type: r.to_string(),
                         actual_span: ctx.span_for(call.metadata),
