@@ -11,18 +11,18 @@ use bumpalo::collections::Vec as BumpVec;
 
 #[derive(Copy, Clone, Debug)]
 pub struct ReturnContext<'a> {
-    // the expected outcome of the current expr
+    /// the expected outcome of the current expr
     expected_type: PartialType<'a>,
 
-    // for explicit returns, return expressions
+    /// for explicit returns, return expressions
     #[allow(unused)]
     function_return_type: PartialType<'a>,
     function_return_type_span: MetadataId,
 
-    // for breaks and return expressions etc.
+    /// for breaks and return expressions etc.
     block_return_type: PartialType<'a>,
 
-    // is the block we're typechecking the toplevel scope of a function?
+    /// is the block we're typechecking the toplevel scope of a function?
     function_block: bool,
 }
 
