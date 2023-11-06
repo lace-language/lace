@@ -23,7 +23,7 @@ pub struct ReturnContext<'a> {
     block_return_type: PartialType<'a>,
 
     /// is the block we're typechecking the toplevel scope of a function?
-    function_block: bool,
+    is_function_block: bool,
 }
 
 fn typecheck_lit<'a>(
@@ -87,7 +87,7 @@ fn typecheck_expr<'a>(
                     ctx,
                     &ReturnContext {
                         expected_type: lvar.into(),
-                        function_block: false,
+                        is_function_block: false,
                         ..return_context
                     },
                 )?;
@@ -96,7 +96,7 @@ fn typecheck_expr<'a>(
                     ctx,
                     &ReturnContext {
                         expected_type: rvar.into(),
-                        function_block: false,
+                        is_function_block: false,
                         ..return_context
                     },
                 )?;
@@ -129,7 +129,7 @@ fn typecheck_expr<'a>(
                     ctx,
                     &ReturnContext {
                         expected_type: lvar.into(),
-                        function_block: false,
+                        is_function_block: false,
                         ..return_context
                     },
                 )?;
@@ -156,7 +156,7 @@ fn typecheck_expr<'a>(
             ctx,
             &ReturnContext {
                 block_return_type: return_context.expected_type,
-                function_block: false,
+                is_function_block: false,
                 ..return_context
             },
         ),
@@ -497,7 +497,7 @@ fn typecheck_block<'a>(
             return Ok(());
         };
 
-        if return_context.function_block {
+        if return_context.is_function_block {
             Err(TypeError::ImplicitFunctionReturn {
                 expected_ret_ty: l.to_string(),
                 expected_ret_ty_spec_span: ctx.span_for(return_context.function_return_type_span),
@@ -521,7 +521,7 @@ fn typecheck_block<'a>(
             return Ok(());
         };
 
-        if return_context.function_block {
+        if return_context.is_function_block {
             Err(TypeError::ExpectedFunctionReturn {
                 expected_ret_ty: l.to_string(),
                 expected_ret_ty_spec_span: ctx.span_for(return_context.function_return_type_span),
@@ -555,7 +555,7 @@ fn typecheck_function(f: &Metadata<Function>, ctx: &mut TypeContext) -> Result<(
                 .map(|i| i.metadata)
                 .unwrap_or(f.metadata),
             block_return_type: return_type,
-            function_block: true,
+            is_function_block: true,
         },
     )
 }
