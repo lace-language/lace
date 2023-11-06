@@ -81,8 +81,9 @@ fn function_arity() {
 }
 
 // TODO: this test should pass but now gives completely the wrong error :(
+#[ignore]
 #[test]
 fn param_types() {
-    // parse!(let types = "fn x(x: bool) {} fn main() {x(1);}");
-    // assert_matches!(&types.unwrap_err()[0], TypeError::FunctionCall { .. });
+    parse!(let types = "fn x(x: bool) {} fn main() {x(1);}");
+    assert_matches!(&types.unwrap_err()[0], TypeError::FunctionCall { .. });
 }
