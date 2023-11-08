@@ -1,32 +1,50 @@
 use crate::name_resolution::ResolvedNames;
-use crate::parser::ast::Ast;
+use crate::parser::ast::{Ast, TypeSpec};
 use crate::parser::span::Spans;
-use crate::source_file::SourceFile;
-use crate::typechecking::constraint::TypeConstraintGenerator;
-use crate::typechecking::context::TypeContext;
+use crate::typechecking::ctx::TypeContext;
 use crate::typechecking::error::TypeError;
-use crate::typechecking::solve::SolvedTypes;
+use crate::typechecking::solved::SolvedTypes;
+use crate::typechecking::ty::{PartialType, TypeVariableGenerator};
 use bumpalo::Bump;
 
-pub mod constraint;
-pub mod constraint_generation;
-pub mod constraint_metadata;
-pub mod context;
+pub mod check_pass;
+pub mod ctx;
 pub mod error;
-pub mod solve;
+pub mod solved;
+pub mod static_pass;
+#[cfg(test)]
+pub mod test;
 pub mod ty;
 
-pub fn typecheck<'ast, 'types>(
-    ast: &Ast<'_, 'ast>,
-    name_resolutions: &ResolvedNames,
-    spans: &Spans,
-    source: SourceFile<'ast>,
-    arena: &'types Bump,
-) -> Result<SolvedTypes<'types>, Vec<TypeError>> {
-    let mut type_context = TypeContext::new(arena, spans);
+fn type_spec_to_partial_type<'a>(spec: &TypeSpec) -> PartialType<'a> {
+    match spec {
+        TypeSpec::Name(m) if m.value.string == "int" => PartialType::Int,
+        TypeSpec::Name(m) if m.value.string == "string" => PartialType::String,
+        TypeSpec::Name(m) if m.value.string == "bool" => PartialType::Bool,
+        TypeSpec::Name(m) => unimplemented!("{m:?}"),
+    }
+}
 
-    ast.generate_constraints(&mut type_context);
-    type_context.add_name_resolutions(name_resolutions);
-    type_context.save_debug(spans, source);
-    type_context.solve()
+pub fn typecheck<'types, 'names>(
+    ast: &Ast<'_, '_>,
+    resolved_names: &'names ResolvedNames,
+    spans: &'names Spans,
+    arena: &'types Bump,
+) -> Result<SolvedTypes<'types, 'names>, Vec<TypeError>> {
+    let mut errs = Vec::new();
+
+    let variable_generator = TypeVariableGenerator::new();
+    let mut ctx = TypeContext::new(resolved_names, arena, spans, &variable_generator);
+    static_pass::find_statics_ast(ast, &mut ctx);
+
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+
+    let solved = check_pass::typecheck_ast(ast, resolved_names, ctx, &mut errs);
+    if !errs.is_empty() {
+        Err(errs)
+    } else {
+        Ok(solved)
+    }
 }

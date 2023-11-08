@@ -3,7 +3,7 @@ use crate::lexer::token::Token;
 use crate::parser::ast::{Block, Expr, ExprKind, Statement};
 use crate::parser::error::ParseResult;
 use crate::parser::Parser;
-use bumpalo::collections::Vec;
+use bumpalo::collections::Vec as BumpVec;
 
 use crate::ast_metadata::Metadata;
 
@@ -29,7 +29,7 @@ impl<'s, 'a> Parser<'s, 'a> {
     pub(super) fn block(&mut self) -> ParseResult<Metadata<Block<'s, 'a>>> {
         let start_span = self.accept_required(Token::CurlyLeft)?;
 
-        let mut vec = Vec::new_in(self.arena);
+        let mut vec = BumpVec::new_in(self.arena);
 
         loop {
             if let Some(end_span) = self.accept_optional(Token::CurlyRight)? {

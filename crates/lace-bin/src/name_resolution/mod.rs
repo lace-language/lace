@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
 
 use crate::ast_metadata::{Metadata, MetadataId};
@@ -17,8 +17,9 @@ use stack_graphs::{
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
 pub struct ResolvedNames {
-    pub(crate) names: Vec<(MetadataId, MetadataId)>,
+    pub(crate) names: HashMap<MetadataId, MetadataId>,
 }
 
 pub struct Graph {
@@ -141,12 +142,12 @@ impl<'s, 'a> Graph {
         // stack-graphs has spans too, which come from the lsp_positions crate.
         // However, those require line numbers and columns, which area bit
         // complicated to compute.
-        let mut no_shadow_results = Vec::new();
+        let mut no_shadow_results = HashMap::new();
         for res in &results {
             if results.iter().all(|other| !other.shadows(&mut paths, res)) {
                 let start = self.id_map.get(&self.graph[res.start_node].id()).unwrap();
                 let end = self.id_map.get(&self.graph[res.end_node].id()).unwrap();
-                no_shadow_results.push((*start, *end))
+                no_shadow_results.insert(*start, *end);
             }
         }
 

@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Used after type checking, contains no unresolved types
 #[derive(Copy, Clone)]
@@ -56,11 +57,12 @@ pub enum PartialType<'a> {
     Int,
     Bool,
     Function {
-        params: &'a [TypeOrVariable<'a>],
-        ret: &'a TypeOrVariable<'a>,
+        params: &'a [PartialType<'a>],
+        ret: &'a PartialType<'a>,
     },
-    Tuple(&'a [TypeOrVariable<'a>]),
+    Tuple(&'a [PartialType<'a>]),
     String,
+    Variable(TypeVariable),
 }
 
 impl<'a> Display for PartialType<'a> {
@@ -75,6 +77,7 @@ impl<'a> Display for PartialType<'a> {
             PartialType::Tuple(&[_]) => write!(f, "(_,)"),
             PartialType::Tuple(t) => write!(f, "({})", t.iter().map(|_| "_").join(",")),
             PartialType::String => write!(f, "string"),
+            PartialType::Variable(v) => write!(f, "type variable {v:?}"),
         }
     }
 }
@@ -84,42 +87,29 @@ impl<'a> PartialType<'a> {
     pub const Unit: Self = Self::Tuple(&[]);
 }
 
+impl<'a> From<TypeVariable> for PartialType<'a> {
+    fn from(value: TypeVariable) -> Self {
+        Self::Variable(value)
+    }
+}
+
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct TypeVariable(pub usize);
 
 /// generates new type variables in increasing order.
 pub struct TypeVariableGenerator {
-    curr: usize,
+    curr: AtomicUsize,
 }
 
 impl TypeVariableGenerator {
     pub fn new() -> Self {
-        Self { curr: 0 }
+        Self {
+            curr: AtomicUsize::new(0),
+        }
     }
 
-    pub fn fresh(&mut self) -> TypeVariable {
-        let old = self.curr;
-        self.curr += 1;
-        TypeVariable(old)
-    }
-}
-
-#[derive(Copy, Clone, Hash, Debug, Eq, PartialEq)]
-#[must_use]
-pub enum TypeOrVariable<'a> {
-    Concrete(PartialType<'a>),
-    Variable(TypeVariable),
-}
-
-impl<'a> From<PartialType<'a>> for TypeOrVariable<'a> {
-    fn from(value: PartialType<'a>) -> Self {
-        Self::Concrete(value)
-    }
-}
-
-impl<'a> From<TypeVariable> for TypeOrVariable<'a> {
-    fn from(value: TypeVariable) -> Self {
-        Self::Variable(value)
+    pub fn fresh(&self) -> TypeVariable {
+        TypeVariable(self.curr.fetch_add(1, Ordering::Relaxed))
     }
 }
 
