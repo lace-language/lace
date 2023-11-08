@@ -87,6 +87,7 @@ fn typecheck_expr<'a>(
                     ctx,
                     &ReturnContext {
                         expected_type: if_true_var.into(),
+                        block_return_type: if_true_var.into(),
                         is_function_block: false,
                         ..return_context
                     },
@@ -96,6 +97,7 @@ fn typecheck_expr<'a>(
                     ctx,
                     &ReturnContext {
                         expected_type: if_false_var.into(),
+                        block_return_type: if_false_var.into(),
                         is_function_block: false,
                         ..return_context
                     },
@@ -119,6 +121,14 @@ fn typecheck_expr<'a>(
                         else_ty: if_false_ty.to_string(),
                         if_block_span: ctx.span_for(if_true.metadata),
                     });
+                }
+
+                if let Err((l, r)) = ctx.unify(if_true_var, return_context.expected_type) {
+                    return Err(TypeError::FailedUnification(FailedUnification {
+                        expected: r.to_string(),
+                        was: l.to_string(),
+                        was_span: ctx.span_for(expr.metadata),
+                    }));
                 }
             } else {
                 let if_true_var = ctx.fresh();
@@ -145,6 +155,14 @@ fn typecheck_expr<'a>(
                         return_ty: if_true_ty.to_string(),
                         if_block_span: ctx.span_for(if_true.metadata),
                     });
+                }
+
+                if let Err((l, r)) = ctx.unify(PartialType::Unit, return_context.expected_type) {
+                    return Err(TypeError::FailedUnification(FailedUnification {
+                        expected: r.to_string(),
+                        was: l.to_string(),
+                        was_span: ctx.span_for(expr.metadata),
+                    }));
                 }
             }
 

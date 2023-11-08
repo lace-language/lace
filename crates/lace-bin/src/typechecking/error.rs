@@ -340,16 +340,15 @@ impl Diagnostic for TypeError {
             )),
             TypeError::LetSpec {
                 type_spec_span,
+                type_spec_type,
                 was_type,
                 expr_span,
-                ..
             } => Some(Box::new(
                 [
                     LabeledSpan::new(
-                        Some(
-                            "cannot be assigned to variable with this type specification"
-                                .to_string(),
-                        ),
+                        Some(format!(
+                            "cannot be assigned to variable with this type ({type_spec_type})"
+                        )),
                         type_spec_span.offset(),
                         type_spec_span.length(),
                     ),

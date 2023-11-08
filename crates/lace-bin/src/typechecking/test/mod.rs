@@ -1,4 +1,4 @@
-use crate::error::ResultExt;
+use crate::error::{CompilerError, ResultExt};
 use crate::lexer::token_buffer::TokenBuffer;
 use crate::name_resolution::Graph;
 use crate::parser::Parser;
@@ -36,6 +36,20 @@ pub fn typecheck_test_one_error<'s>(
         assert_eq!(errs.len(), 1);
 
         test(errs.into_iter().next().unwrap())
+    })
+}
+
+pub fn typecheck_test_ok<'s>(source: SourceFile<'s>) {
+    typecheck_test(source, |res| {
+        if res.is_err() {
+            let err = res
+                .as_ref()
+                .map_err(|t| CompilerError::Type(t.clone().into()))
+                .map_err_miette(source)
+                .unwrap_err();
+
+            assert!(false, "unexpected error:\n{err}\n({:?})", res.unwrap_err());
+        }
     })
 }
 
@@ -92,5 +106,148 @@ fn param_types() {
     typecheck_test_one_error(
         SourceFile::test("fn x(x: bool) {} fn main() {x(1);}"),
         |e| assert_matches!(e, TypeError::FunctionCall { .. }),
+    );
+}
+
+#[test]
+fn if_test() {
+    typecheck_test_ok(SourceFile::test(
+        "fn main() {
+if true {
+    3;
+} else {
+    3;
+}
+    }",
+    ));
+    typecheck_test_ok(SourceFile::test(
+        "fn main() {
+let ans = if true {
+    3
+} else {
+    3
+};
+    }",
+    ));
+
+    typecheck_test_ok(SourceFile::test(
+        "fn main() {
+let ans: int = if true {
+    3
+} else {
+    3
+};
+    }",
+    ));
+
+    typecheck_test_one_error(
+        SourceFile::test(
+            "fn main() {
+let ans: int = if true {
+    3
+} else {
+    true
+};
+    }",
+        ),
+        |e| {
+            assert_matches!(
+                e,
+                TypeError::IfElseEqual {
+                    if_true_return_span: Some(_),
+                    if_false_return_span: Some(_),
+                    ..
+                }
+            )
+        },
+    );
+
+    typecheck_test_one_error(
+        SourceFile::test(
+            "fn main() {
+let ans: int = if true {
+    3
+} else {
+    true;
+};
+    }",
+        ),
+        |e| {
+            assert_matches!(
+                e,
+                TypeError::IfElseEqual {
+                    if_true_return_span: Some(_),
+                    if_false_return_span: None,
+                    ..
+                }
+            )
+        },
+    );
+
+    typecheck_test_one_error(
+        SourceFile::test(
+            "fn main() {
+let ans: bool = if true {
+    3;
+} else {
+    true
+};
+    }",
+        ),
+        |e| {
+            assert_matches!(
+                e,
+                TypeError::IfElseEqual {
+                    if_true_return_span: None,
+                    if_false_return_span: Some(_),
+                    ..
+                }
+            )
+        },
+    );
+
+    typecheck_test_ok(SourceFile::test(
+        "fn main() {
+let ans = if true {
+    3;
+} else {
+    true;
+};
+    }",
+    ));
+
+    typecheck_test_ok(SourceFile::test(
+        "fn main() {
+let ans: int = if true {
+    3
+} else {
+    3
+};
+    }",
+    ));
+
+    typecheck_test_one_error(
+        SourceFile::test(
+            "fn main() {
+let ans: bool = if true {
+    3
+} else {
+    3
+};
+    }",
+        ),
+        |e| assert_matches!(e, TypeError::LetSpec { .. }),
+    );
+    typecheck_test_one_error(
+        SourceFile::test(
+            "fn main() {
+let ans: bool = if true {
+    3;
+} else {
+    3;
+};
+    }",
+        ),
+        |e| assert_matches!(e, TypeError::LetSpec { .. }),
     );
 }
