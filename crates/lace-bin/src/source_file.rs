@@ -9,6 +9,14 @@ pub struct SourceFile<'s> {
 }
 
 impl<'s> SourceFile<'s> {
+    #[cfg(test)]
+    pub fn test(contents: &'s str) -> Self {
+        SourceFile {
+            contents,
+            filename: "test.lc",
+        }
+    }
+
     pub fn named_source(&self) -> NamedSource {
         NamedSource::new(self.filename, self.contents.to_string())
     }
