@@ -106,8 +106,10 @@ pub enum TypeError {
     },
     #[error("expected the return types of if and else blocks to be equal")]
     IfElseEqual {
-        if_return_span: Span,
-        else_return_span: Span,
+        if_true_return_span: Option<Span>,
+        if_true_block_span: Span,
+        if_false_return_span: Option<Span>,
+        if_false_block_span: Span,
         if_ty: String,
         else_ty: String,
         if_block_span: Span,
@@ -275,23 +277,41 @@ impl Diagnostic for TypeError {
                 .into_iter(),
             )),
             TypeError::IfElseEqual {
-                if_return_span,
-                else_return_span,
+                if_true_return_span,
+                if_true_block_span,
+                if_false_return_span,
+                if_false_block_span,
                 if_ty,
                 else_ty,
                 if_block_span: _,
             } => Some(Box::new(
                 [
-                    LabeledSpan::new(
-                        Some(format!("returns a value here of type {if_ty}")),
-                        if_return_span.offset(),
-                        if_return_span.length(),
-                    ),
-                    LabeledSpan::new(
-                        Some(format!("returns a value here of type {else_ty}")),
-                        else_return_span.offset(),
-                        else_return_span.length(),
-                    ),
+                    if let Some(s) = if_true_return_span {
+                        LabeledSpan::new(
+                            Some(format!("returns a value here of type {if_ty}")),
+                            s.offset(),
+                            s.length(),
+                        )
+                    } else {
+                        LabeledSpan::new(
+                            Some(format!("this block retrurns {if_ty}")),
+                            if_true_block_span.offset(),
+                            if_true_block_span.length(),
+                        )
+                    },
+                    if let Some(s) = if_false_return_span {
+                        LabeledSpan::new(
+                            Some(format!("returns a value here of type {else_ty}")),
+                            s.offset(),
+                            s.length(),
+                        )
+                    } else {
+                        LabeledSpan::new(
+                            Some(format!("this block returns {else_ty}")),
+                            if_false_block_span.offset(),
+                            if_false_block_span.length(),
+                        )
+                    },
                 ]
                 .into_iter(),
             )),

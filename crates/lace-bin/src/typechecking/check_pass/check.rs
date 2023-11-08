@@ -103,21 +103,18 @@ fn typecheck_expr<'a>(
 
                 if let Err((if_true_ty, if_false_ty)) = ctx.unify(if_true_var, if_false_var) {
                     return Err(TypeError::IfElseEqual {
-                        if_return_span: ctx.span_for(
-                            if_true
-                                .value
-                                .last
-                                .as_ref()
-                                .unwrap_or_lice("should have a return expr")
-                                .metadata,
-                        ),
-                        else_return_span: ctx.span_for(
-                            r.value
-                                .last
-                                .as_ref()
-                                .unwrap_or_lice("should have a return expr")
-                                .metadata,
-                        ),
+                        if_true_return_span: if_true
+                            .value
+                            .last
+                            .as_ref()
+                            .map(|i| ctx.span_for(i.metadata)),
+                        if_true_block_span: ctx.span_for(if_true.metadata),
+                        if_false_return_span: r
+                            .value
+                            .last
+                            .as_ref()
+                            .map(|i| ctx.span_for(i.metadata)),
+                        if_false_block_span: ctx.span_for(r.metadata),
                         if_ty: if_true_ty.to_string(),
                         else_ty: if_false_ty.to_string(),
                         if_block_span: ctx.span_for(if_true.metadata),
