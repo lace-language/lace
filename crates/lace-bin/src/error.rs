@@ -1,7 +1,9 @@
 use crate::lexer::error::LexError;
+use crate::lowering::error::LoweringError;
 use crate::parser::error::ParseError;
 use crate::source_file::SourceFile;
 use crate::typechecking::error::TypeError;
+use crate::typechecking::solved::ResolveTypeError;
 use derive_more::From;
 use miette::{Diagnostic, Report};
 use thiserror::Error;
@@ -25,6 +27,14 @@ pub enum CompilerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SingleType(#[from] TypeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ResolveType(#[from] ResolveTypeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Lowering(#[from] LoweringError),
 }
 
 #[derive(Debug, Error, Diagnostic, From, Clone, PartialEq)]

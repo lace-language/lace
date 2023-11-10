@@ -47,9 +47,6 @@ pub enum TypeError {
         op_span: Span,
     },
 
-    #[error("type was never constrained")]
-    Unresolved,
-
     /// Should be raised when unifying a concrete type with some type variable passed in fails.
     /// The place where that type variable was passed in is responsible for the error
     #[error("expected {} but got unified with {}", _0.expected, _0.was)]
@@ -174,7 +171,6 @@ impl Diagnostic for TypeError {
                 ]
                 .into_iter(),
             )),
-            TypeError::Unresolved => None,
             TypeError::Comparison {
                 left_ty,
                 right_ty,

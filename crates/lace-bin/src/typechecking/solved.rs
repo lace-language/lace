@@ -1,18 +1,26 @@
-use crate::ast_metadata::MetadataId;
+use crate::ast_metadata::{Metadata, MetadataId};
 use crate::lice::Lice;
 use crate::name_resolution::ResolvedNames;
+use crate::parser::ast::Function;
 use crate::typechecking::ctx::Types;
 use crate::typechecking::error::TypeError;
 use crate::typechecking::ty::{PartialType, Type, TypeVariable};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
+use miette::Diagnostic;
 use std::collections::HashMap;
+use thiserror::Error;
+
+#[derive(Debug, Error, Diagnostic, Clone, PartialEq)]
+pub enum ResolveTypeError {
+    #[error("type not resolved")]
+    Unresolved,
+}
 
 #[derive(Debug)]
 pub struct SolvedTypes<'a, 'n> {
     types: Types<'a>,
     /// TODO: give expr nodes types as well
-    #[allow(unused)]
     node_types: HashMap<MetadataId, PartialType<'a>>,
     name_mapping: HashMap<MetadataId, TypeVariable>,
     resolved_names: &'n ResolvedNames,
@@ -37,7 +45,7 @@ impl<'a, 'n> SolvedTypes<'a, 'n> {
         &self,
         ty: impl Into<PartialType<'a>>,
         arena: &'x Bump,
-    ) -> Result<Type<'x>, TypeError> {
+    ) -> Result<Type<'x>, ResolveTypeError> {
         let representative = self
             .types
             .get_representative(ty.into())
@@ -77,7 +85,7 @@ impl<'a, 'n> SolvedTypes<'a, 'n> {
                 Type::Tuple(new.into_bump_slice())
             }
             PartialType::String => Type::String,
-            PartialType::Variable(_) => return Err(TypeError::Unresolved),
+            PartialType::Variable(_) => return Err(ResolveTypeError::Unresolved),
         })
     }
 
@@ -91,11 +99,24 @@ impl<'a, 'n> SolvedTypes<'a, 'n> {
         self.name_mapping.get(id).cloned()
     }
 
+    pub fn type_of_node<'x>(
+        &self,
+        node: MetadataId,
+        arena: &'x Bump,
+    ) -> Result<Type<'x>, ResolveTypeError> {
+        let typevar = self
+            .node_types
+            .get(&node)
+            .unwrap_or_else(|| lice!("node with id {node:?} has no type information saved"));
+
+        self.resolve_type_recursive(*typevar, arena)
+    }
+
     pub fn type_of_name<'x>(
         &self,
         name_node_id: MetadataId,
         arena: &'x Bump,
-    ) -> Result<Type<'x>, TypeError> {
+    ) -> Result<Type<'x>, ResolveTypeError> {
         let typevar = self
             .type_variable_for_identifier(name_node_id)
             .unwrap_or_else(|| lice!("name not typechecked {name_node_id:?}"));
