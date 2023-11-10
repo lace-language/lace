@@ -347,7 +347,7 @@ impl Diagnostic for TypeError {
                 [
                     LabeledSpan::new(
                         Some(format!(
-                            "cannot be assigned to variable with this type ({type_spec_type})"
+                            "cannot be assigned to variable with this type ({type_spec_type}) "
                         )),
                         type_spec_span.offset(),
                         type_spec_span.length(),

@@ -1,10 +1,11 @@
+use crate::ids::IdGenerator;
 use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::{Ast, TypeSpec};
 use crate::parser::span::Spans;
 use crate::typechecking::ctx::TypeContext;
 use crate::typechecking::error::TypeError;
 use crate::typechecking::solved::SolvedTypes;
-use crate::typechecking::ty::{PartialType, TypeVariableGenerator};
+use crate::typechecking::ty::PartialType;
 use bumpalo::Bump;
 
 pub mod check_pass;
@@ -33,7 +34,7 @@ pub fn typecheck<'types, 'names>(
 ) -> Result<SolvedTypes<'types, 'names>, Vec<TypeError>> {
     let mut errs = Vec::new();
 
-    let variable_generator = TypeVariableGenerator::new();
+    let variable_generator = IdGenerator::new();
     let mut ctx = TypeContext::new(resolved_names, arena, spans, &variable_generator);
     static_pass::find_statics_ast(ast, &mut ctx);
 

@@ -1,6 +1,6 @@
+use derive_more::From;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Used after type checking, contains no unresolved types
 #[derive(Copy, Clone)]
@@ -93,25 +93,8 @@ impl<'a> From<TypeVariable> for PartialType<'a> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, From)]
 pub struct TypeVariable(pub usize);
-
-/// generates new type variables in increasing order.
-pub struct TypeVariableGenerator {
-    curr: AtomicUsize,
-}
-
-impl TypeVariableGenerator {
-    pub fn new() -> Self {
-        Self {
-            curr: AtomicUsize::new(0),
-        }
-    }
-
-    pub fn fresh(&self) -> TypeVariable {
-        TypeVariable(self.curr.fetch_add(1, Ordering::Relaxed))
-    }
-}
 
 #[cfg(test)]
 mod test {

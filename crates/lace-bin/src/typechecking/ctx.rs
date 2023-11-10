@@ -1,8 +1,9 @@
 use crate::ast_metadata::{Metadata, MetadataId};
+use crate::ids::IdGenerator;
 use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::Ident;
 use crate::parser::span::{Span, Spans};
-use crate::typechecking::ty::{PartialType, TypeVariable, TypeVariableGenerator};
+use crate::typechecking::ty::{PartialType, TypeVariable};
 use bumpalo::Bump;
 use std::collections::HashMap;
 
@@ -60,7 +61,7 @@ pub struct TypeContext<'a, 'r, 't> {
     pub(super) name_mapping: HashMap<MetadataId, TypeVariable>,
     pub(super) node_types: HashMap<MetadataId, PartialType<'a>>,
     pub(super) types: Types<'a>,
-    variable_generator: &'t TypeVariableGenerator,
+    variable_generator: &'t IdGenerator<TypeVariable>,
     resolved_names: &'r ResolvedNames,
     pub arena: &'a Bump,
     spans: &'r Spans,
@@ -71,7 +72,7 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
         resolved_names: &'r ResolvedNames,
         arena: &'a Bump,
         spans: &'r Spans,
-        variable_generator: &'t TypeVariableGenerator,
+        variable_generator: &'t IdGenerator<TypeVariable>,
     ) -> Self {
         Self {
             name_mapping: Default::default(),

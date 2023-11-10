@@ -1,9 +1,13 @@
+use derive_more::From;
 use int::BinaryValue;
 
 mod int;
 
+#[derive(Debug, PartialEq, Eq, From, Copy, Clone, Hash, Ord, PartialOrd)]
 pub struct Variable(usize);
+#[derive(Debug, PartialEq, Eq, From, Copy, Clone, Hash, Ord, PartialOrd)]
 pub struct Label(usize);
+#[derive(Debug, PartialEq, Eq, From, Copy, Clone, Hash, Ord, PartialOrd)]
 pub struct FunctionName(usize);
 
 pub enum Value {
