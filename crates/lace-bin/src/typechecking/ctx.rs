@@ -111,6 +111,14 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
         self.arena.alloc(value)
     }
 
+    pub fn store_type_info_for_node<T>(
+        &mut self,
+        node: &Metadata<T>,
+        ty: impl Into<PartialType<'a>>,
+    ) {
+        self.node_types.insert(node.metadata, ty.into());
+    }
+
     pub fn type_variable_for_identifier(&mut self, ident: &Metadata<Ident>) -> TypeVariable {
         // when we get a variable, it could be from a definition or from a usage.
         // if it's a usage, this lookup will get us the definition. If it was a definition

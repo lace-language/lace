@@ -110,8 +110,6 @@ pub struct TypeVariable(pub usize);
 #[cfg(test)]
 mod test {
     use super::Type;
-    use crate::lowering::lir::FunctionName;
-
     #[test]
     fn display_function() {
         assert_eq!(

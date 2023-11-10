@@ -54,6 +54,8 @@ fn typecheck_expr<'a>(
     ctx: &mut TypeContext<'a, '_, '_>,
     return_context: ReturnContext<'a>,
 ) -> Result<(), TypeError> {
+    ctx.store_type_info_for_node(expr, return_context.expected_type);
+
     match &expr.value {
         ExprKind::Lit(lit) => typecheck_lit(
             &Metadata {

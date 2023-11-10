@@ -1,9 +1,7 @@
-use crate::ast_metadata::{Metadata, MetadataId};
+use crate::ast_metadata::MetadataId;
 use crate::lice::Lice;
 use crate::name_resolution::ResolvedNames;
-use crate::parser::ast::Function;
 use crate::typechecking::ctx::Types;
-use crate::typechecking::error::TypeError;
 use crate::typechecking::ty::{PartialType, Type, TypeVariable};
 use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
