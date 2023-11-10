@@ -110,6 +110,16 @@ fn param_types() {
 }
 
 #[test]
+fn func_eq() {
+    typecheck_test_one_error(
+        SourceFile::test("fn a() {} fn b() {} fn main() { a == b; }"),
+        |e| assert_matches!(e, TypeError::Comparison { .. }),
+    );
+
+    typecheck_test_ok(SourceFile::test("fn a() {} fn main() { a == a; }"))
+}
+
+#[test]
 fn if_test() {
     typecheck_test_ok(SourceFile::test(
         "fn main() {

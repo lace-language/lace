@@ -1,3 +1,4 @@
+use crate::lowering::lir::FunctionName;
 use derive_more::From;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
@@ -10,6 +11,8 @@ pub enum Type<'a> {
     Function {
         params: &'a [Type<'a>],
         ret: &'a Type<'a>,
+        /// every function has a unique ID that marks its type different
+        function_name: FunctionName,
     },
     Tuple(&'a [Type<'a>]),
     String,
@@ -20,7 +23,7 @@ impl Display for Type<'_> {
         match self {
             Type::Int => write!(f, "int"),
             Type::Bool => write!(f, "bool"),
-            Type::Function { params, ret } => {
+            Type::Function { params, ret, .. } => {
                 write!(f, "fn (")?;
                 let mut params = params.iter();
                 if let Some(p) = params.next() {
@@ -59,6 +62,14 @@ pub enum PartialType<'a> {
     Function {
         params: &'a [PartialType<'a>],
         ret: &'a PartialType<'a>,
+        /// each function is a unique type. They can be unified during typechecking,
+        /// but after typechecking, different functions with the same signature are
+        /// different. However, a partial type may not have a function id. However, while
+        /// unifying functions, None function ids are always replaced with the function id
+        /// of what is unified with. That way, the typechecker can at any point assert that
+        /// something is a certain function, not caring about the ID, but typechecking will
+        /// produce a function type with an ID. Function IDs are generated in the static pass.
+        function_name: Option<FunctionName>,
     },
     Tuple(&'a [PartialType<'a>]),
     String,
@@ -99,6 +110,7 @@ pub struct TypeVariable(pub usize);
 #[cfg(test)]
 mod test {
     use super::Type;
+    use crate::lowering::lir::FunctionName;
 
     #[test]
     fn display_function() {
@@ -106,6 +118,7 @@ mod test {
             Type::Function {
                 params: &[],
                 ret: &Type::Int,
+                function_name: 0.into(),
             }
             .to_string(),
             "fn () -> int"
@@ -114,6 +127,7 @@ mod test {
             Type::Function {
                 params: &[Type::Int],
                 ret: &Type::Int,
+                function_name: 0.into(),
             }
             .to_string(),
             "fn (int) -> int"
@@ -122,6 +136,7 @@ mod test {
             Type::Function {
                 params: &[Type::Int, Type::Int],
                 ret: &Type::Int,
+                function_name: 0.into(),
             }
             .to_string(),
             "fn (int, int) -> int"

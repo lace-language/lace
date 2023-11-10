@@ -1,5 +1,6 @@
 use crate::ast_metadata::{Metadata, MetadataId};
 use crate::ids::IdGenerator;
+use crate::lowering::lir::FunctionName;
 use crate::name_resolution::ResolvedNames;
 use crate::parser::ast::Ident;
 use crate::parser::span::{Span, Spans};
@@ -24,6 +25,12 @@ impl<'a> Types<'a> {
             p @ PartialType::Variable(v) if *v == var => Some(p),
             PartialType::Variable(v) => self.type_of_type_variable(*v),
             p => Some(p),
+        }
+    }
+
+    pub fn update(&mut self, old: PartialType<'a>, new: PartialType<'a>) {
+        if let PartialType::Variable(x) = old {
+            self.data.insert(x, new);
         }
     }
 
@@ -62,6 +69,7 @@ pub struct TypeContext<'a, 'r, 't> {
     pub(super) node_types: HashMap<MetadataId, PartialType<'a>>,
     pub(super) types: Types<'a>,
     variable_generator: &'t IdGenerator<TypeVariable>,
+    function_name_generator: &'t IdGenerator<FunctionName>,
     resolved_names: &'r ResolvedNames,
     pub arena: &'a Bump,
     spans: &'r Spans,
@@ -73,12 +81,14 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
         arena: &'a Bump,
         spans: &'r Spans,
         variable_generator: &'t IdGenerator<TypeVariable>,
+        function_name_generator: &'t IdGenerator<FunctionName>,
     ) -> Self {
         Self {
             name_mapping: Default::default(),
             node_types: Default::default(),
             types: Types::new(),
             variable_generator,
+            function_name_generator,
             resolved_names,
             arena,
             spans,
@@ -91,6 +101,10 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
 
     pub fn fresh(&mut self) -> TypeVariable {
         self.variable_generator.fresh()
+    }
+
+    pub fn fresh_function_name(&mut self) -> FunctionName {
+        self.function_name_generator.fresh()
     }
 
     pub fn alloc<T>(&self, value: T) -> &'a T {
@@ -120,10 +134,12 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
         a: impl Into<PartialType<'a>>,
         b: impl Into<PartialType<'a>>,
     ) -> Result<(), UnifyError<'a>> {
-        let a = self.types.get_representative_or_insert(a.into());
-        let b = self.types.get_representative_or_insert(b.into());
+        let a = a.into();
+        let b = b.into();
+        let a_repr = self.types.get_representative_or_insert(a);
+        let b_repr = self.types.get_representative_or_insert(b);
 
-        match (a, b) {
+        match (a_repr, b_repr) {
             (PartialType::Variable(a), PartialType::Variable(b)) => {
                 self.types.insert(a, PartialType::Variable(b));
             }
@@ -143,17 +159,30 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
                 PartialType::Function {
                     params: a_params,
                     ret: a_ret,
+                    function_name: a_function_name,
                 },
                 PartialType::Function {
                     params: b_params,
                     ret: b_ret,
+                    function_name: b_function_name,
                 },
-            ) if a_params.len() == b_params.len() => {
+            ) if a_params.len() == b_params.len()  // same length of parameters
+                && (a_function_name == b_function_name // and at least one of the two function names is None or the function names match
+                    || a_function_name.is_none()
+                    || b_function_name.is_none()) =>
+            {
                 for (l, r) in a_params.iter().zip(b_params) {
                     self.unify(*l, *r)?;
                 }
 
                 self.unify(*a_ret, *b_ret)?;
+
+                //
+                if a_function_name.is_none() {
+                    self.types.update(a, b_repr);
+                } else if b_function_name.is_none() {
+                    self.types.update(b, a_repr);
+                }
             }
 
             (a, b) => return Err((a, b)),

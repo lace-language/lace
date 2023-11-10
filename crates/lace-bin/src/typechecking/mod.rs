@@ -35,7 +35,14 @@ pub fn typecheck<'types, 'names>(
     let mut errs = Vec::new();
 
     let variable_generator = IdGenerator::new();
-    let mut ctx = TypeContext::new(resolved_names, arena, spans, &variable_generator);
+    let function_name_generator = IdGenerator::new();
+    let mut ctx = TypeContext::new(
+        resolved_names,
+        arena,
+        spans,
+        &variable_generator,
+        &function_name_generator,
+    );
     static_pass::find_statics_ast(ast, &mut ctx);
 
     if !errs.is_empty() {

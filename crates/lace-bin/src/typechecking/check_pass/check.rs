@@ -408,6 +408,7 @@ fn typecheck_expr<'a>(
             let expected_f_ty = PartialType::Function {
                 params: param_tys.into_bump_slice(),
                 ret: ctx.alloc(PartialType::Variable(ret_var)),
+                function_name: None,
             };
 
             if let Err((l, r)) = ctx.unify(called_f_ty, expected_f_ty) {

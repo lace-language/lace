@@ -46,7 +46,11 @@ impl<'a, 'n> SolvedTypes<'a, 'n> {
         Ok(match representative {
             PartialType::Int => Type::Int,
             PartialType::Bool => Type::Bool,
-            PartialType::Function { params, ret } => {
+            PartialType::Function {
+                params,
+                ret,
+                function_name,
+            } => {
                 let mut new_params = BumpVec::new_in(arena);
 
                 for i in params {
@@ -57,6 +61,9 @@ impl<'a, 'n> SolvedTypes<'a, 'n> {
                 Type::Function {
                     params: new_params.into_bump_slice(),
                     ret: arena.alloc(self.resolve_type_recursive(*ret, arena)?),
+                    function_name: function_name.unwrap_or_lice(
+                        "every function should have been assigned a function name id",
+                    ),
                 }
             }
             PartialType::Tuple(t) => {

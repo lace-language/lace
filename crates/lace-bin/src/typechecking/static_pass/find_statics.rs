@@ -28,6 +28,7 @@ pub fn find_statics_function(f: &Metadata<Function>, ctx: &mut TypeContext) {
     let func_ty = PartialType::Function {
         params: params.into_bump_slice(),
         ret: ctx.alloc(return_type),
+        function_name: Some(ctx.fresh_function_name()),
     };
     let ty_var = ctx.type_variable_for_identifier(&f.value.name);
 
