@@ -1,4 +1,4 @@
-use crate::lowering::variable::VariableDeclarations;
+use crate::lowering::variable::VariableDeclaration;
 use derive_more::From;
 use int::BinaryValue;
 
@@ -20,19 +20,39 @@ pub struct FunctionName(usize);
 #[derive(Debug, Clone)]
 pub enum Place {
     Variable(Variable),
+    #[allow(unused)] // TODO: remove
     Void,
+}
+
+impl From<Variable> for Place {
+    fn from(value: Variable) -> Self {
+        Place::Variable(value)
+    }
 }
 
 /// A value is something used in the right side of an expression. This can be a [`Place`],
 /// or a constant [`BinaryValue`] such as an integer
+#[derive(Debug, Clone)]
 pub enum Value {
     Place(Place),
-    Simple(BinaryValue),
+    Binary(BinaryValue),
+}
+
+impl From<BinaryValue> for Value {
+    fn from(value: BinaryValue) -> Self {
+        Self::Binary(value)
+    }
 }
 
 impl From<Place> for Value {
     fn from(value: Place) -> Self {
         Self::Place(value)
+    }
+}
+
+impl From<Variable> for Value {
+    fn from(value: Variable) -> Self {
+        Self::Place(value.into())
     }
 }
 
@@ -52,7 +72,11 @@ pub enum Expr {
     Not(Value),
     Neg(Value),
     Value(Value),
-    Call { function_name: Label },
+
+    #[allow(unused)] // TODO: remove
+    Call {
+        function_name: Label,
+    },
 }
 
 impl From<Value> for Expr {
@@ -72,6 +96,7 @@ pub enum Statement {
     Assignment { expr: Expr, place: Place },
 }
 
+#[allow(unused)] // TODO: remove
 pub enum Terminator {
     /// Unconditionally go to another basic block.
     Goto(Label),
@@ -106,9 +131,9 @@ pub struct BasicBlock {
 }
 
 pub struct Function {
-    name: FunctionName,
-    variables: VariableDeclarations,
-    blocks: Vec<BasicBlock>,
+    pub name: FunctionName,
+    pub variables: Vec<VariableDeclaration>,
+    pub blocks: Vec<BasicBlock>,
 }
 
 pub struct Lir {

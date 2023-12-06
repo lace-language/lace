@@ -13,12 +13,13 @@ use crate::ast_metadata::Metadata;
 use crate::ids::IdGenerator;
 use crate::lowering::error::LoweringError;
 use crate::lowering::lir::{Label, Lir, Variable};
-use crate::lowering::variable::VariableDeclaration;
+
 use crate::parser::ast::{Ast, Item};
 use crate::typechecking::solved::{ResolveTypeError, SolvedTypes};
-use crate::typechecking::ty::Type;
+use crate::typechecking::ty::{Type, TypeVariable};
 use bumpalo::Bump;
-use std::cell::RefCell;
+
+use std::collections::HashMap;
 
 pub fn lower(ast: &Ast, solved_types: &SolvedTypes) -> Result<Lir, LoweringError> {
     let mut functions = Vec::new();
@@ -31,7 +32,7 @@ pub fn lower(ast: &Ast, solved_types: &SolvedTypes) -> Result<Lir, LoweringError
 
     for item in ast.items {
         match item {
-            Item::Function(f) => functions.push(ctx.lower_function(f)?),
+            Item::Function(f) => functions.push(ctx.lower_function(f)),
         }
     }
 
@@ -42,9 +43,8 @@ pub struct LoweringContext<'b, 't, 'a, 'n> {
     label_generator: IdGenerator<Label>,
     solved_types: &'t SolvedTypes<'a, 'n>,
     type_arena: &'b Bump,
-
-    // TODO: nicer solution for this.
-    variable_declarations: RefCell<Vec<VariableDeclaration>>,
+    variable_mapping: HashMap<TypeVariable, Variable>,
+    variable_generator: IdGenerator<Variable>,
 }
 
 impl<'b, 't, 'a, 'n> LoweringContext<'b, 't, 'a, 'n> {
@@ -53,7 +53,8 @@ impl<'b, 't, 'a, 'n> LoweringContext<'b, 't, 'a, 'n> {
             label_generator: IdGenerator::new(),
             solved_types,
             type_arena,
-            variable_declarations: RefCell::new(vec![]),
+            variable_mapping: Default::default(),
+            variable_generator: IdGenerator::new(),
         }
     }
 

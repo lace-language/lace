@@ -49,19 +49,25 @@ pub struct BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
     /// the statements for the current block that's being built
     current_statements: Vec<lir::Statement>,
 
-    ctx: &'l LoweringContext<'b, 't, 'a, 'n>,
+    // Option so we can temporarily move out of it in child
+    /// Warning: use [`Self::ctx`]
+    __ctx: Option<&'l mut LoweringContext<'b, 't, 'a, 'n>>,
 
     // Option so we can temporarily move out of it in child
+    /// Warning: use [`Self::vd`]
     __vd: Option<&'l mut VariableDeclarations>,
 }
 
 impl<'l, 'b, 't, 'a, 'n> BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
-    pub fn new(ctx: &'l LoweringContext<'b, 't, 'a, 'n>, vd: &'l mut VariableDeclarations) -> Self {
+    pub fn new(
+        ctx: &'l mut LoweringContext<'b, 't, 'a, 'n>,
+        vd: &'l mut VariableDeclarations,
+    ) -> Self {
         Self {
             blocks: Vec::new(),
             current_label: ctx.fresh_label(),
             current_statements: Vec::new(),
-            ctx,
+            __ctx: Some(ctx),
             __vd: Some(vd),
         }
     }

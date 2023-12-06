@@ -8,7 +8,8 @@ impl<'l, 'b, 't, 'a, 'n> BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
     }
 
     pub(super) fn emit_variable_assignment(&mut self, expr: lir::Expr) -> lir::Place {
-        let place = lir::Place::Variable(self.vd().declare_variable());
+        let name = self.ctx().variable_generator.fresh();
+        let place = lir::Place::Variable(self.vd().declare_variable(name));
         self.emit_assignment(place.clone(), expr);
         place
     }

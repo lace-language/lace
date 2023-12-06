@@ -24,8 +24,10 @@ impl<'l, 'b, 't, 'a, 'n> BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
         self.current_label = next_block_label;
     }
 
+    #[allow(unused)] // TODO: remove
     pub fn emit_terminator_fresh_block(&mut self, t: lir::Terminator) {
-        self.emit_terminator(t, self.ctx.fresh_label())
+        let lbl = self.ctx().fresh_label();
+        self.emit_terminator(t, lbl)
     }
 
     pub fn finish(mut self, t: lir::Terminator) -> BlockList {

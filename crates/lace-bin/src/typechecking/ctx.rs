@@ -103,6 +103,11 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
         self.variable_generator.fresh()
     }
 
+    pub fn fresh_int(&mut self) -> TypeVariable {
+        let var = self.variable_generator.fresh();
+        TypeVariable::Int(var.variable())
+    }
+
     pub fn fresh_function_name(&mut self) -> FunctionName {
         self.function_name_generator.fresh()
     }
@@ -147,14 +152,34 @@ impl<'a, 'r, 't> TypeContext<'a, 'r, 't> {
         let a_repr = self.types.get_representative_or_insert(a);
         let b_repr = self.types.get_representative_or_insert(b);
 
+        println!("unifying {a_repr} with {b_repr}");
+
         match (a_repr, b_repr) {
+            // unifying type variables with integers, makes the representative the integer because they're more specific
+            (PartialType::Variable(a), PartialType::Variable(b @ TypeVariable::Int(_))) => {
+                self.types.insert(a, PartialType::Variable(b));
+            }
+            (PartialType::Variable(a @ TypeVariable::Int(_)), PartialType::Variable(b)) => {
+                self.types.insert(b, PartialType::Variable(a));
+            }
+
+            // you can unify any variable with any other variable
             (PartialType::Variable(a), PartialType::Variable(b)) => {
                 self.types.insert(a, PartialType::Variable(b));
             }
-            (PartialType::Variable(a), b) | (b, PartialType::Variable(a)) => {
+            // you can unify integers with int inference variables
+            (x @ PartialType::Int { .. }, PartialType::Variable(v @ TypeVariable::Int(_)))
+            | (PartialType::Variable(v @ TypeVariable::Int(_)), x @ PartialType::Int { .. }) => {
+                self.types.insert(v, x);
+            }
+            // you can unify any type with type variables (the result is the other type)
+            (PartialType::Variable(a @ TypeVariable::Type(_)), b)
+            | (b, PartialType::Variable(a @ TypeVariable::Type(_))) => {
                 self.types.insert(a, b);
             }
-            (PartialType::Int, PartialType::Int) => {}
+            // unify ints if their bits and signedness match
+            (l @ PartialType::Int { .. }, r @ PartialType::Int { .. }) if l == r => {}
+
             (PartialType::String, PartialType::String) => {}
             (PartialType::Bool, PartialType::Bool) => {}
             (PartialType::Tuple(a), PartialType::Tuple(b)) if a.len() == b.len() => {

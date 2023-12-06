@@ -1,6 +1,7 @@
-use crate::ids::IdGenerator;
+use crate::ast_metadata::MetadataId;
+
 use crate::lowering::lir::Variable;
-use crate::parser::ast::Item;
+use crate::lowering::LoweringContext;
 
 pub struct VariableDeclaration {
     pub name: Variable,
@@ -9,7 +10,6 @@ pub struct VariableDeclaration {
 
 pub struct VariableDeclarations {
     declarations: Vec<VariableDeclaration>,
-    variable_generator: IdGenerator<Variable>,
 }
 
 impl IntoIterator for VariableDeclarations {
@@ -22,7 +22,7 @@ impl IntoIterator for VariableDeclarations {
 }
 
 impl<'a> IntoIterator for &'a VariableDeclarations {
-    type Item = VariableDeclaration;
+    type Item = &'a VariableDeclaration;
     type IntoIter = <&'a Vec<VariableDeclaration> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -30,22 +30,40 @@ impl<'a> IntoIterator for &'a VariableDeclarations {
     }
 }
 
+impl Default for VariableDeclarations {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VariableDeclarations {
     pub fn new() -> Self {
         Self {
             declarations: vec![],
-            variable_generator: IdGenerator::new(),
         }
     }
 
-    pub fn iter<'a>(&'a self) -> impl IntoIterator<Item = VariableDeclaration> + 'a {
+    pub fn iter(&self) -> impl IntoIterator<Item = &VariableDeclaration> {
         self.declarations.iter()
     }
 
     /// Declares a variable in the current function
-    pub fn declare_variable(&mut self /*TODO: type etc*/) -> Variable {
-        let name = self.variable_generator.fresh();
+    pub fn declare_variable(&mut self, name: Variable /*TODO: type etc*/) -> Variable {
         self.declarations.push(VariableDeclaration { name });
         name
+    }
+}
+
+impl<'b, 't, 'a, 'n> LoweringContext<'b, 't, 'a, 'n> {
+    pub fn lookup_variable(&mut self, var: MetadataId) -> Variable {
+        let tyvar = self
+            .solved_types
+            .type_variable_for_identifier(var)
+            .unwrap_or_else(|| lice!("name not typechecked {var:?}"));
+
+        *self
+            .variable_mapping
+            .entry(tyvar)
+            .or_insert_with(|| self.variable_generator.fresh())
     }
 }

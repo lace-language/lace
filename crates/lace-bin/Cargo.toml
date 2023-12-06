@@ -15,3 +15,4 @@ thiserror = { workspace = true }
 unionfind = { workspace = true }
 stack-graphs = { workspace = true }
 itertools = { workspace = true }
+bnum = { workspace = true }

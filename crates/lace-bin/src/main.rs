@@ -19,7 +19,7 @@ mod source_file;
 mod typechecking;
 
 use crate::error::{CompilerError, ResultExt, TypeErrors};
-use crate::lowering::{lower, LoweringContext};
+use crate::lowering::lower;
 use crate::parser::ast::Ast;
 use crate::source_file::SourceFile;
 use bumpalo::Bump;

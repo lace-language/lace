@@ -1,7 +1,8 @@
+use crate::lice::Lice;
 use crate::lowering::basic_block::BasicBlockBuilder;
-use crate::lowering::lir;
 use crate::lowering::lir::Label;
 use crate::lowering::variable::VariableDeclarations;
+use crate::lowering::{lir, LoweringContext};
 use std::ops::Deref;
 
 /// A type that represents a frozen basic block builder,
@@ -23,7 +24,11 @@ impl<'l, 'b, 't, 'a, 'n> Deref for FrozenBasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
 
 impl<'l, 'b, 't, 'a, 'n> BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
     pub fn vd(&mut self) -> &mut VariableDeclarations {
-        self.__vd.as_mut().unwrap()
+        self.__vd.as_mut().unwrap_or_lice("vd moved out")
+    }
+
+    pub fn ctx(&mut self) -> &mut LoweringContext<'b, 't, 'a, 'n> {
+        self.__ctx.as_mut().unwrap_or_lice("ctx moved out")
     }
 
     pub fn freeze(self) -> FrozenBasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
@@ -38,8 +43,15 @@ impl<'l, 'b, 't, 'a, 'n> BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
         &mut self,
         f: impl FnOnce(&mut BasicBlockBuilder<'l, 'b, 't, 'a, 'n>) -> T,
     ) -> (FrozenBasicBlockBuilder<'l, 'b, 't, 'a, 'n>, T) {
-        let mut bbb = BasicBlockBuilder::new(self.ctx, self.__vd.take().unwrap());
+        // make a child, and move the ctx and vd into there
+        let mut bbb = BasicBlockBuilder::new(self.__ctx.take().unwrap(), self.__vd.take().unwrap());
+
+        // run this function while ctx and vd are there
         let res = f(&mut bbb);
+
+        // put the ctx and vd back
+        self.__ctx = bbb.__ctx.take();
+        self.__vd = bbb.__vd.take();
 
         (bbb.freeze(), res)
     }
@@ -83,7 +95,11 @@ impl<'l, 'b, 't, 'a, 'n> BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
     /// ```
     ///
     /// and jump_after would be inserted into the `current_label`
-    pub fn insert(&mut self, other: FrozenBasicBlockBuilder, jump_after: Label) {
+    pub fn insert(
+        &mut self,
+        other: FrozenBasicBlockBuilder<'l, 'b, 't, 'a, 'n>,
+        jump_after: Label,
+    ) {
         let blocks = other.0.finish(lir::Terminator::Goto(jump_after));
         self.blocks.extend(blocks);
 
@@ -94,8 +110,8 @@ impl<'l, 'b, 't, 'a, 'n> BasicBlockBuilder<'l, 'b, 't, 'a, 'n> {
     }
 
     /// Like [`insert`](Self::insert) but generates the `jump_after` label fresh
-    pub fn insert_fresh_block(&mut self, other: FrozenBasicBlockBuilder) {
-        let jump_after = self.ctx.fresh_label();
+    pub fn insert_fresh_block(&mut self, other: FrozenBasicBlockBuilder<'l, 'b, 't, 'a, 'n>) {
+        let jump_after = self.ctx().fresh_label();
         self.insert(other, jump_after)
     }
 }

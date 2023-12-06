@@ -7,6 +7,7 @@ use bumpalo::collections::Vec as BumpVec;
 use bumpalo::Bump;
 use miette::Diagnostic;
 use std::collections::HashMap;
+use std::num::NonZeroU16;
 use thiserror::Error;
 
 #[derive(Debug, Error, Diagnostic, Clone, PartialEq)]
@@ -50,7 +51,13 @@ impl<'a, 'n> SolvedTypes<'a, 'n> {
             .unwrap_or_lice("should have been typechecked");
 
         Ok(match representative {
-            PartialType::Int => Type::Int,
+            PartialType::Int { bits, signed } => Type::Int { bits, signed },
+
+            // default int type (i32)
+            PartialType::Variable(TypeVariable::Int(_)) => Type::Int {
+                bits: NonZeroU16::new(32).unwrap(),
+                signed: true,
+            },
             PartialType::Bool => Type::Bool,
             PartialType::Function {
                 params,
@@ -87,7 +94,7 @@ impl<'a, 'n> SolvedTypes<'a, 'n> {
         })
     }
 
-    fn type_variable_for_identifier(&self, ident: MetadataId) -> Option<TypeVariable> {
+    pub fn type_variable_for_identifier(&self, ident: MetadataId) -> Option<TypeVariable> {
         // when we get a variable, it could be from a definition or from a usage.
         // if it's a usage, this lookup will get us the definition. If it was a definition
         // already, we get None back.
