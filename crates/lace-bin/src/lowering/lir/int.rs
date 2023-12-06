@@ -158,7 +158,10 @@ impl From<bool> for BinaryValue {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use crate::lowering::lir::int::BinaryValue;
+    use bnum::types::U512;
 
     #[test]
     pub fn int_size() {
