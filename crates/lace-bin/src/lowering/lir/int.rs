@@ -13,6 +13,17 @@ pub enum BinaryValue {
 }
 
 impl BinaryValue {
+    // TODO: const unwrap is nightly. this is nicer for now than
+    //       a match and a const panic, but be this needs to be fixed in the future
+    pub const TRUE: Self = BinaryValue::Smol {
+        data: 1,
+        bits: unsafe { NonZeroU16::new_unchecked(1) },
+    };
+    pub const FALSE: Self = BinaryValue::Smol {
+        data: 0,
+        bits: unsafe { NonZeroU16::new_unchecked(1) },
+    };
+
     pub fn new(value: u128, bits: NonZeroU16) -> Option<Self> {
         let mask = match bits.get() {
             i @ 0..=127 => (1u128 << i) - 1,

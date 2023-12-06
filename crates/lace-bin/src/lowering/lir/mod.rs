@@ -1,18 +1,39 @@
+use crate::lowering::variable::VariableDeclarations;
 use derive_more::From;
 use int::BinaryValue;
 
-mod int;
+pub mod fmt;
+pub mod int;
 
 #[derive(Debug, PartialEq, Eq, From, Copy, Clone, Hash, Ord, PartialOrd)]
 pub struct Variable(usize);
 #[derive(Debug, PartialEq, Eq, From, Copy, Clone, Hash, Ord, PartialOrd)]
 pub struct Label(usize);
+// TODO: also include original function name for debugging
 #[derive(Debug, PartialEq, Eq, From, Copy, Clone, Hash, Ord, PartialOrd)]
 pub struct FunctionName(usize);
 
-pub enum Value {
+/// A place is a loction in which the outcome of an expression can be stored.
+/// The left side of an assignment Statement. The right side of an assignment
+/// can also contain Places, but also constants for example. Those are represented
+/// by a [`Value`]
+#[derive(Debug, Clone)]
+pub enum Place {
     Variable(Variable),
+    Void,
+}
+
+/// A value is something used in the right side of an expression. This can be a [`Place`],
+/// or a constant [`BinaryValue`] such as an integer
+pub enum Value {
+    Place(Place),
     Simple(BinaryValue),
+}
+
+impl From<Place> for Value {
+    fn from(value: Place) -> Self {
+        Self::Place(value)
+    }
 }
 
 pub enum Expr {
@@ -20,17 +41,35 @@ pub enum Expr {
     Sub(Value, Value),
     Mul(Value, Value),
     Div(Value, Value),
+
+    Gt(Value, Value),
+    Gte(Value, Value),
+    Lt(Value, Value),
+    Lte(Value, Value),
+    Eq(Value, Value),
+    Neq(Value, Value),
+
+    Not(Value),
+    Neg(Value),
     Value(Value),
+    Call { function_name: Label },
+}
+
+impl From<Value> for Expr {
+    fn from(value: Value) -> Self {
+        Self::Value(value)
+    }
+}
+
+impl From<Place> for Expr {
+    fn from(value: Place) -> Self {
+        Self::Value(value.into())
+    }
 }
 
 pub enum Statement {
-    Assignment {
-        expr: Expr,
-        name: Variable,
-    },
-    Call {
-        name: FunctionName, /* todo: more */
-    },
+    /// assign expr into place
+    Assignment { expr: Expr, place: Place },
 }
 
 pub enum Terminator {
@@ -59,15 +98,16 @@ pub enum Terminator {
 
 pub struct BasicBlock {
     /// A basic block has a name
-    name: Label,
+    pub name: Label,
     /// Some statements
-    stmts: Vec<Statement>,
+    pub stmts: Vec<Statement>,
     /// And then some last statement that might bring us to another basic block.
-    terminator: Terminator,
+    pub terminator: Terminator,
 }
 
 pub struct Function {
     name: FunctionName,
+    variables: VariableDeclarations,
     blocks: Vec<BasicBlock>,
 }
 
