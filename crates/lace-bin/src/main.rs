@@ -10,13 +10,16 @@ mod test;
 mod ast_metadata;
 mod debug_file;
 mod error;
+mod ids;
 mod lexer;
+mod lowering;
 mod name_resolution;
 mod parser;
 mod source_file;
 mod typechecking;
 
 use crate::error::{CompilerError, ResultExt, TypeErrors};
+use crate::lowering::lower;
 use crate::parser::ast::Ast;
 use crate::source_file::SourceFile;
 use bumpalo::Bump;
@@ -68,6 +71,10 @@ fn compile<'s, 'a>(source: SourceFile<'s>, arena: &'a Bump) -> Result<Ast<'s, 'a
         .with_source_code(source.named_source());
         eprintln!("{:?}", report);
     }
+
+    let lir = lower(&ast, &types)?;
+    println!("{}", lir);
+
     Ok(ast)
 }
 

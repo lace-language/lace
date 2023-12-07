@@ -39,7 +39,7 @@ pub fn typecheck_test_one_error<'s>(
     })
 }
 
-pub fn typecheck_test_ok<'s>(source: SourceFile<'s>) {
+pub fn typecheck_test_ok(source: SourceFile<'_>) {
     typecheck_test(source, |res| {
         if res.is_err() {
             let err = res
@@ -55,7 +55,7 @@ pub fn typecheck_test_ok<'s>(source: SourceFile<'s>) {
 
 #[test]
 fn invalid_binop_usage() {
-    let binop = |e| assert_matches!(e, TypeError::BinaryOp { .. });
+    let binop = |e| assert_matches!(e, TypeError::ExactBinaryOp { .. });
     typecheck_test_one_error(SourceFile::test("fn main() {3 + true}"), binop);
     typecheck_test_one_error(SourceFile::test("fn main() {3 * true}"), binop);
     typecheck_test_one_error(SourceFile::test("fn main() {3 - true}"), binop);
@@ -107,6 +107,16 @@ fn param_types() {
         SourceFile::test("fn x(x: bool) {} fn main() {x(1);}"),
         |e| assert_matches!(e, TypeError::FunctionCall { .. }),
     );
+}
+
+#[test]
+fn func_eq() {
+    typecheck_test_one_error(
+        SourceFile::test("fn a() {} fn b() {} fn main() { a == b; }"),
+        |e| assert_matches!(e, TypeError::Comparison { .. }),
+    );
+
+    typecheck_test_ok(SourceFile::test("fn a() {} fn main() { a == a; }"))
 }
 
 #[test]

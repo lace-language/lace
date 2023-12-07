@@ -16,4 +16,5 @@ derive_more = "0.99.17"
 stack-graphs = { git="https://github.com/jdonszelmann/stack-graphs.git", branch="optional-tree-sitter", features = ["visualization"], default-features = false }
 itertools = "0.11.0"
 unionfind = {path="./crates/unionfind"}
+bnum = "0.8.0"
 

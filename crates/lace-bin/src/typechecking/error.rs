@@ -29,7 +29,7 @@ impl<T> ResultExt for Result<T, TypeError> {
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum TypeError {
     #[error("expected {side} operand of {op} to be of type {expected_ty}")]
-    BinaryOp {
+    ExactBinaryOp {
         op: BinaryOp,
         value_ty: String,
         side: &'static str,
@@ -37,6 +37,17 @@ pub enum TypeError {
         expected_ty: String,
         value_span: Span,
         op_span: Span,
+    },
+
+    #[error("cannot apply binary operator to {left_ty} {op} {right_ty}")]
+    BinaryOp {
+        left_ty: String,
+        left_span: Span,
+
+        right_ty: String,
+        right_span: Span,
+
+        op: BinaryOp,
     },
     #[error("expected expression to be of type {expected_ty} because of {op} operator")]
     UnaryOp {
@@ -46,9 +57,6 @@ pub enum TypeError {
         expr: Span,
         op_span: Span,
     },
-
-    #[error("type was never constrained")]
-    Unresolved,
 
     /// Should be raised when unifying a concrete type with some type variable passed in fails.
     /// The place where that type variable was passed in is responsible for the error
@@ -138,6 +146,27 @@ impl Diagnostic for TypeError {
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
         match self {
             TypeError::BinaryOp {
+                left_ty,
+                left_span,
+                right_ty,
+                right_span,
+                ..
+            } => Some(Box::new(
+                [
+                    LabeledSpan::new(
+                        Some(left_ty.clone()),
+                        left_span.offset(),
+                        left_span.length(),
+                    ),
+                    LabeledSpan::new(
+                        Some(right_ty.clone()),
+                        right_span.offset(),
+                        right_span.length(),
+                    ),
+                ]
+                .into_iter(),
+            )),
+            TypeError::ExactBinaryOp {
                 value_ty,
                 value_span,
                 op_span,
@@ -174,7 +203,6 @@ impl Diagnostic for TypeError {
                 ]
                 .into_iter(),
             )),
-            TypeError::Unresolved => None,
             TypeError::Comparison {
                 left_ty,
                 right_ty,
@@ -347,7 +375,7 @@ impl Diagnostic for TypeError {
                 [
                     LabeledSpan::new(
                         Some(format!(
-                            "cannot be assigned to variable with this type ({type_spec_type})"
+                            "cannot be assigned to variable with this type ({type_spec_type}) "
                         )),
                         type_spec_span.offset(),
                         type_spec_span.length(),

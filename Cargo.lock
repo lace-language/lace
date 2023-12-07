@@ -141,6 +141,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bnum"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab9008b6bb9fc80b5277f2fe481c09e828743d9151203e804583eb4c9e15b31d"
+
+[[package]]
 name = "bumpalo"
 version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -521,6 +527,7 @@ dependencies = [
 name = "lace-bin"
 version = "0.1.0"
 dependencies = [
+ "bnum",
  "bumpalo",
  "clap",
  "derive_more",

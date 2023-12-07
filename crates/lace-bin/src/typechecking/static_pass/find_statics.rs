@@ -28,8 +28,11 @@ pub fn find_statics_function(f: &Metadata<Function>, ctx: &mut TypeContext) {
     let func_ty = PartialType::Function {
         params: params.into_bump_slice(),
         ret: ctx.alloc(return_type),
+        function_name: Some(ctx.fresh_function_name()),
     };
     let ty_var = ctx.type_variable_for_identifier(&f.value.name);
+
+    ctx.store_type_info_for_node(f, func_ty);
 
     if ctx.unify(ty_var, func_ty).is_err() {
         lice!("should never fail because this is the first usage of this type variable, as we're declaring the function it describes here.");
