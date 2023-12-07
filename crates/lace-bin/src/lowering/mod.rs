@@ -4,9 +4,9 @@
 
 pub mod basic_block;
 pub mod error;
-pub mod executor;
 mod function;
 pub mod lir;
+pub mod lire;
 mod variable;
 
 use crate::ast_metadata::Metadata;
